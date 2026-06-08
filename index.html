@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kalorije">
+<meta name="theme-color" content="#15140f">
+<title>Kalorije</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#15140f;
+    --bg2:#1d1c15;
+    --surface:#22211a;
+    --surface2:#2b2a21;
+    --line:#36352a;
+    --txt:#f4f0e6;
+    --muted:#9a978a;
+    --faint:#6b685d;
+    --kcal:#ff8a3d;
+    --pro:#46d39a;
+    --carb:#5b8def;
+    --fat:#f5c24b;
+    --over:#ff5d5d;
+    --display:'Bricolage Grotesque',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
+    --body:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',sans-serif;
+    --sat:env(safe-area-inset-top);
+    --sab:env(safe-area-inset-bottom);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:var(--body);
+    font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none;}
+  body{padding-top:var(--sat);}
+  h1,h2,h3{font-family:var(--display);margin:0;letter-spacing:-.02em;}
+  button{font-family:var(--body);cursor:pointer;border:none;background:none;color:inherit;}
+  .num{font-family:var(--display);font-variant-numeric:tabular-nums;}
+
+  #app{max-width:540px;margin:0 auto;padding:0 14px calc(28px + var(--sab));}
+
+  /* ---------- Header / status ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 2px 8px;}
+  .topbar .date{font-family:var(--display);font-weight:700;font-size:19px;}
+  .topbar .date small{display:block;font-family:var(--body);font-weight:500;color:var(--muted);font-size:12px;letter-spacing:.02em;}
+  .navbtns{display:flex;gap:8px;}
+  .navbtns button{width:38px;height:38px;border-radius:12px;background:var(--surface);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:17px;}
+  .navbtns button:active{background:var(--surface2);}
+
+  .status{background:linear-gradient(160deg,var(--bg2),var(--surface));border:1px solid var(--line);
+    border-radius:24px;padding:18px 16px 16px;display:flex;gap:16px;align-items:center;}
+  .ring-wrap{position:relative;flex:0 0 auto;}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+  .ring-center .big{font-family:var(--display);font-weight:800;font-size:30px;line-height:1;}
+  .ring-center .sub{font-size:11px;color:var(--muted);margin-top:3px;}
+  .ring-center .unit{font-size:10px;color:var(--faint);}
+  .macros{flex:1;display:flex;flex-direction:column;gap:11px;min-width:0;}
+  .macro{display:flex;flex-direction:column;gap:5px;}
+  .macro .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;}
+  .macro .lab .nm{color:var(--muted);font-weight:600;letter-spacing:.01em;}
+  .macro .lab .vl{font-family:var(--display);font-weight:700;font-size:13px;}
+  .macro .lab .vl b{color:var(--txt);}
+  .macro .lab .vl span{color:var(--faint);font-weight:500;}
+  .bar{height:7px;border-radius:6px;background:#000;overflow:hidden;position:relative;}
+  .bar > i{display:block;height:100%;border-radius:6px;transition:width .35s cubic-bezier(.3,.8,.3,1);}
+  .bar.over > i{background:var(--over)!important;}
+
+  /* ---------- Section titles ---------- */
+  .sec-h{display:flex;align-items:center;justify-content:space-between;margin:22px 4px 10px;}
+  .sec-h h2{font-size:14px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+  .sec-h .meta{font-size:12px;color:var(--faint);}
+
+  /* ---------- Today list ---------- */
+  .today{display:flex;flex-direction:column;gap:7px;}
+  .today .empty{color:var(--faint);font-size:13px;text-align:center;padding:18px;border:1px dashed var(--line);border-radius:16px;}
+  .item{display:flex;align-items:center;gap:11px;background:var(--surface);border:1px solid var(--line);
+    border-radius:15px;padding:9px 11px;}
+  .item .ic{width:34px;height:34px;border-radius:9px;flex:0 0 auto;object-fit:cover;background:var(--surface2);
+    display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:700;color:var(--muted);font-size:14px;}
+  .item .nm{flex:1;min-width:0;}
+  .item .nm b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .item .nm small{color:var(--faint);font-size:11.5px;}
+  .item .kc{font-family:var(--display);font-weight:700;font-size:15px;color:var(--kcal);}
+  .item .kc small{display:block;font-family:var(--body);font-weight:500;font-size:10px;color:var(--faint);text-align:right;}
+  .item .del{width:26px;height:26px;border-radius:8px;color:var(--faint);font-size:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .item .del:active{background:var(--surface2);color:var(--over);}
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex;gap:7px;overflow-x:auto;padding:2px 2px 10px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:0 0 auto;padding:8px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);
+    color:var(--muted);font-size:13px;font-weight:600;white-space:nowrap;}
+  .tab.active{background:var(--txt);color:var(--bg);border-color:var(--txt);}
+
+  /* ---------- Food grid ---------- */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;}
+  .food{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:8px;
+    display:flex;flex-direction:column;gap:6px;position:relative;transition:transform .08s;}
+  .food:active{transform:scale(.95);background:var(--surface2);}
+  .food .ph{width:100%;aspect-ratio:1;border-radius:12px;background:var(--surface2);overflow:hidden;
+    display:flex;align-items:center;justify-content:center;}
+  .food .ph img{width:100%;height:100%;object-fit:cover;}
+  .food .ph .ph-txt{font-family:var(--display);font-weight:800;font-size:24px;color:var(--faint);}
+  .food .fnm{font-size:12.5px;font-weight:600;line-height:1.15;text-align:center;min-height:29px;
+    display:flex;align-items:center;justify-content:center;}
+  .food .fkc{font-family:var(--display);font-weight:700;font-size:12px;color:var(--kcal);text-align:center;}
+  .food .fkc span{color:var(--faint);font-family:var(--body);font-weight:500;}
+  .food .edit{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:8px;background:rgba(0,0,0,.45);
+    color:var(--txt);font-size:13px;display:flex;align-items:center;justify-content:center;opacity:.85;}
+  .food.add{align-items:center;justify-content:center;border-style:dashed;color:var(--muted);min-height:120px;}
+  .food.add .plus{font-family:var(--display);font-size:34px;font-weight:500;line-height:.7;}
+  .food.add .lbl{font-size:11px;margin-top:6px;}
+
+  /* ---------- Chart ---------- */
+  .chart-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px 12px 8px;}
+  .chart-chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;}
+  .chip{padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;background:var(--surface2);color:var(--muted);border:1px solid transparent;}
+  .chip.active{color:var(--bg);}
+  #chart{width:100%;display:block;}
+  .chart-legend{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);margin-top:4px;padding:0 2px;}
+
+  /* ---------- Bottom actions ---------- */
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;}
+  .act{padding:15px;border-radius:18px;background:var(--surface);border:1px solid var(--line);
+    font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .act:active{background:var(--surface2);}
+  .act.full{grid-column:1/-1;}
+
+  /* ---------- Modal ---------- */
+  .ov{position:fixed;inset:0;background:rgba(5,5,3,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    z-index:50;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .ov.show{opacity:1;pointer-events:auto;}
+  .sheet{background:var(--bg2);border:1px solid var(--line);border-bottom:none;border-radius:26px 26px 0 0;
+    width:100%;max-width:540px;max-height:92vh;overflow-y:auto;padding:8px 18px calc(24px + var(--sab));
+    transform:translateY(20px);transition:transform .25s cubic-bezier(.3,.9,.3,1);-webkit-overflow-scrolling:touch;}
+  .ov.show .sheet{transform:translateY(0);}
+  .grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:8px auto 14px;}
+  .sheet h2{font-size:21px;font-weight:800;margin-bottom:4px;}
+  .sheet .desc{color:var(--muted);font-size:13px;margin-bottom:16px;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px;letter-spacing:.02em;}
+  .inp{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:12px 13px;
+    color:var(--txt);font-size:16px;font-family:var(--body);}
+  .inp:focus{outline:none;border-color:var(--kcal);}
+  select.inp{appearance:none;-webkit-appearance:none;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .row4{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+
+  .btn{width:100%;padding:15px;border-radius:14px;font-size:15px;font-weight:700;font-family:var(--display);
+    background:var(--txt);color:var(--bg);}
+  .btn:active{opacity:.85;}
+  .btn.ghost{background:var(--surface);color:var(--txt);border:1px solid var(--line);}
+  .btn.kcal{background:var(--kcal);color:#1a1206;}
+  .btn.danger{background:transparent;color:var(--over);border:1px solid var(--over);}
+  .btn-row{display:flex;gap:10px;margin-top:6px;}
+  .btn-row .btn{flex:1;}
+
+  /* qty modal */
+  .qty-hero{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:6px;}
+  .qty-hero .qph{width:74px;height:74px;border-radius:18px;overflow:hidden;background:var(--surface2);
+    display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:800;font-size:30px;color:var(--faint);}
+  .qty-hero .qph img{width:100%;height:100%;object-fit:cover;}
+  .qty-hero h2{text-align:center;}
+  .qty-val{text-align:center;margin:14px 0 4px;}
+  .qty-val .n{font-family:var(--display);font-weight:800;font-size:48px;line-height:1;}
+  .qty-val .u{color:var(--muted);font-size:15px;margin-left:4px;}
+  .qty-pills{display:flex;justify-content:center;gap:8px;margin:14px 0;}
+  .qty-pills button{flex:1;max-width:74px;padding:13px 0;border-radius:13px;background:var(--surface);border:1px solid var(--line);
+    font-family:var(--display);font-weight:700;font-size:15px;}
+  .qty-pills button:active{background:var(--surface2);}
+  .qty-pills button.plus{color:var(--pro);}
+  .qty-pills button.minus{color:var(--over);}
+  .qty-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0;text-align:center;}
+  .qty-macros .qm{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 4px;}
+  .qty-macros .qm .v{font-family:var(--display);font-weight:700;font-size:17px;}
+  .qty-macros .qm .l{font-size:10px;color:var(--faint);margin-top:2px;}
+
+  .img-picker{display:flex;gap:8px;margin-bottom:8px;}
+  .img-picker button{flex:1;padding:11px 6px;border-radius:12px;background:var(--surface);border:1px solid var(--line);
+    font-size:12px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .img-picker button .i{font-size:18px;}
+  .img-prev{width:84px;height:84px;border-radius:16px;background:var(--surface);border:1px solid var(--line);
+    overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:11px;margin:0 auto 12px;text-align:center;}
+  .img-prev img{width:100%;height:100%;object-fit:cover;}
+
+  .scan-box{background:linear-gradient(150deg,rgba(255,138,61,.12),rgba(91,141,239,.1));border:1px solid var(--line);
+    border-radius:16px;padding:13px;margin-bottom:16px;}
+  .scan-box p{margin:0 0 10px;font-size:12.5px;color:var(--muted);line-height:1.4;}
+  .scan-box .btn{background:var(--surface2);color:var(--txt);border:1px solid var(--line);font-size:14px;}
+  .scan-status{font-size:12px;margin-top:8px;color:var(--muted);text-align:center;min-height:16px;}
+  .scan-status.err{color:var(--over);}
+  .scan-status.ok{color:var(--pro);}
+
+  .pct-warn{font-size:12px;color:var(--over);margin-top:-6px;margin-bottom:10px;display:none;}
+  .hint{font-size:11.5px;color:var(--faint);margin-top:6px;line-height:1.4;}
+  .tabman{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px;}
+  .tabman .t{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);
+    border-radius:999px;padding:7px 8px 7px 12px;font-size:13px;}
+  .tabman .t button{color:var(--faint);font-size:15px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;}
+  .divider{height:1px;background:var(--line);margin:18px 0;}
+  .danger-zone{margin-top:6px;}
+  input[type=file]{display:none;}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--kcal);
+    border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:6px;}
+  @keyframes sp{to{transform:rotate(360deg);}}
+  .toast{position:fixed;bottom:calc(24px + var(--sab));left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--txt);color:var(--bg);padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;
+    z-index:90;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="topbar">
+    <div class="date" id="dateLbl">Danas<small id="dateSub"></small></div>
+    <div class="navbtns">
+      <button id="prevDay">‹</button>
+      <button id="todayBtn">•</button>
+      <button id="nextDay">›</button>
+    </div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="status">
+    <div class="ring-wrap">
+      <svg width="116" height="116" viewBox="0 0 116 116" id="kcalRing">
+        <circle cx="58" cy="58" r="50" fill="none" stroke="#000" stroke-width="11"/>
+        <circle cx="58" cy="58" r="50" fill="none" stroke="var(--kcal)" stroke-width="11" stroke-linecap="round"
+          id="kcalArc" transform="rotate(-90 58 58)" stroke-dasharray="314" stroke-dashoffset="314"/>
+      </svg>
+      <div class="ring-center">
+        <div class="big num" id="kcalNow">0</div>
+        <div class="sub">od <span id="kcalTgt">2000</span></div>
+        <div class="unit">kcal</div>
+      </div>
+    </div>
+    <div class="macros" id="macroBars"></div>
+  </div>
+
+  <!-- TODAY -->
+  <div class="sec-h"><h2>Uneto danas</h2><div class="meta" id="todayCount"></div></div>
+  <div class="today" id="todayList"></div>
+
+  <!-- FOODS -->
+  <div class="sec-h"><h2>Namirnice</h2><div class="meta">tap = dodaj</div></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="grid" id="grid"></div>
+
+  <!-- ACTIONS -->
+  <div class="actions">
+    <button class="act" id="openSettings">⚙︎ Podešavanja</button>
+    <button class="act" id="openAddFood">＋ Nova namirnica</button>
+  </div>
+
+  <!-- CHART -->
+  <div class="sec-h"><h2>Poslednjih 14 dana</h2></div>
+  <div class="chart-card">
+    <div class="chart-chips" id="chartChips"></div>
+    <svg id="chart" viewBox="0 0 340 170" preserveAspectRatio="none"></svg>
+    <div class="chart-legend"><span id="chartFrom"></span><span>cilj — — —</span><span id="chartTo"></span></div>
+  </div>
+</div>
+
+<!-- ===== MODAL ROOT ===== -->
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<!-- hidden file inputs -->
+<input type="file" id="fileGallery" accept="image/*">
+<input type="file" id="fileCamera" accept="image/*" capture="environment">
+<input type="file" id="fileScan" accept="image/*" capture="environment">
+<input type="file" id="fileImport" accept="application/json,.json">
+
+<script>
+/* ============================================================
+   KALORIJE — lični PWA tracker  (single file, IndexedDB)
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const DEFAULT_TABS = ["Sve","Meso i riba","Mleko i sir","Žitarice i hleb","Povrće","Voće","Orašasti i masti","Napici","Slatkiši","Moji obroci"];
+const DEFAULT_SETTINGS = {
+  calorieTarget: 2000, proteinPct: 30, carbsPct: 40, fatPct: 30,
+  tabs: DEFAULT_TABS.slice(), apiKey: "", model: "claude-3-5-sonnet-20241022"
+};
+const MACRO = { protein:{c:"var(--pro)",l:"Proteini",k:4}, carbs:{c:"var(--carb)",l:"Ugljeni h.",k:4}, fat:{c:"var(--fat)",l:"Masti",k:9} };
+
+let state = { settings:{...DEFAULT_SETTINGS}, foods:[], log:[], date:todayKey(), activeTab:"Sve", chartMetric:"kcal" };
+
+/* ---------- date helpers ---------- */
+function todayKey(d=new Date()){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function shiftDate(key,days){ const [y,m,d]=key.split("-").map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()+days); return todayKey(dt); }
+function prettyDate(key){
+  const [y,m,d]=key.split("-").map(Number); const dt=new Date(y,m-1,d);
+  const days=["nedelja","ponedeljak","utorak","sreda","četvrtak","petak","subota"];
+  const mon=["jan","feb","mar","apr","maj","jun","jul","avg","sep","okt","nov","dec"];
+  return {wd:days[dt.getDay()], full:d+". "+mon[m-1]+" "+y};
+}
+
+/* ---------- IndexedDB ---------- */
+let db;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open("kalorije",1);
+    r.onupgradeneeded=e=>{ const d=e.target.result;
+      if(!d.objectStoreNames.contains("foods")) d.createObjectStore("foods",{keyPath:"id"});
+      if(!d.objectStoreNames.contains("log")) d.createObjectStore("log",{keyPath:"id",autoIncrement:true});
+      if(!d.objectStoreNames.contains("settings")) d.createObjectStore("settings",{keyPath:"k"});
+    };
+    r.onsuccess=e=>{db=e.target.result;res();}; r.onerror=e=>rej(e);
+  });
+}
+function tx(store,mode="readonly"){ return db.transaction(store,mode).objectStore(store); }
+function getAll(store){ return new Promise(r=>{ const q=tx(store).getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=()=>r([]); }); }
+function put(store,val){ return new Promise(r=>{ const q=tx(store,"readwrite").put(val); q.onsuccess=()=>r(q.result); }); }
+function del(store,key){ return new Promise(r=>{ const q=tx(store,"readwrite").delete(key); q.onsuccess=()=>r(); }); }
+function clearStore(store){ return new Promise(r=>{ const q=tx(store,"readwrite").clear(); q.onsuccess=()=>r(); }); }
+
+async function loadSettings(){
+  const all=await getAll("settings"); const s=all.find(x=>x.k==="app");
+  if(s) state.settings={...DEFAULT_SETTINGS, ...s.v};
+  if(!Array.isArray(state.settings.tabs)||!state.settings.tabs.length) state.settings.tabs=DEFAULT_TABS.slice();
+}
+async function saveSettings(){ await put("settings",{k:"app", v:state.settings}); }
+
+/* ---------- seed data on first run ---------- */
+async function maybeSeed(){
+  const f=await getAll("foods");
+  if(f.length) return;
+  const seed=[
+    ["Jaje (kuvano)","Meso i riba",155,13,1.1,11,50,"🥚"],
+    ["Pileća prsa","Meso i riba",165,31,0,3.6,150,"🍗"],
+    ["Grčki jogurt","Mleko i sir",59,10,3.6,0.4,170,"🥛"],
+    ["Hleb (integralni)","Žitarice i hleb",247,9,41,3.4,40,"🍞"],
+    ["Banana","Voće",89,1.1,23,0.3,120,"🍌"],
+    ["Badem","Orašasti i masti",579,21,22,50,30,"🥜"],
+  ];
+  for(const [name,tab,kcal,p,c,fat,qty,emo] of seed){
+    await put("foods",{ id:uid(), name, tab, emoji:emo, img:null,
+      per100:{kcal,protein:p,carbs:c,fat}, defaultQty:qty });
+  }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ============================================================
+   COMPUTE
+   ============================================================ */
+function macroTargets(){
+  const s=state.settings, c=s.calorieTarget;
+  return { kcal:c, protein:Math.round(c*s.proteinPct/100/4), carbs:Math.round(c*s.carbsPct/100/4), fat:Math.round(c*s.fatPct/100/9) };
+}
+function dayEntries(key=state.date){ return state.log.filter(e=>e.date===key); }
+function dayTotals(key=state.date){
+  const t={kcal:0,protein:0,carbs:0,fat:0};
+  for(const e of dayEntries(key)){ t.kcal+=e.kcal; t.protein+=e.protein; t.carbs+=e.carbs; t.fat+=e.fat; }
+  for(const k in t) t[k]=Math.round(t[k]);
+  return t;
+}
+function scaleFood(food,qty){
+  const f=qty/100;
+  return { kcal:food.per100.kcal*f, protein:food.per100.protein*f, carbs:food.per100.carbs*f, fat:food.per100.fat*f };
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(){ renderHeader(); renderStatus(); renderToday(); renderTabs(); renderGrid(); renderChart(); }
+
+function renderHeader(){
+  const isToday=state.date===todayKey();
+  const p=prettyDate(state.date);
+  $("#dateLbl").firstChild.nodeValue = isToday?"Danas":p.wd.charAt(0).toUpperCase()+p.wd.slice(1);
+  $("#dateSub").textContent=p.full;
+  $("#todayBtn").style.color = isToday ? "var(--kcal)" : "var(--muted)";
+}
+
+function renderStatus(){
+  const t=dayTotals(), tgt=macroTargets();
+  // kcal ring
+  const C=2*Math.PI*50;
+  const arc=$("#kcalArc"); const ratio=Math.min(t.kcal/Math.max(tgt.kcal,1),1);
+  arc.style.strokeDasharray=C; arc.style.strokeDashoffset=C*(1-ratio);
+  arc.style.stroke = t.kcal>tgt.kcal ? "var(--over)" : "var(--kcal)";
+  $("#kcalNow").textContent=t.kcal;
+  $("#kcalTgt").textContent=tgt.kcal;
+  // macro bars
+  const wrap=$("#macroBars"); wrap.innerHTML="";
+  for(const key of ["protein","carbs","fat"]){
+    const cur=t[key], tg=tgt[key], pct=Math.min(cur/Math.max(tg,1)*100,100), over=cur>tg;
+    const m=MACRO[key];
+    const el=document.createElement("div"); el.className="macro";
+    el.innerHTML=`<div class="lab"><span class="nm">${m.l}</span>
+      <span class="vl"><b>${cur}</b><span> / ${tg} g</span></span></div>
+      <div class="bar${over?" over":""}"><i style="width:${pct}%;background:${m.c}"></i></div>`;
+    wrap.appendChild(el);
+  }
+}
+
+function renderToday(){
+  const list=$("#todayList"); const entries=dayEntries(); list.innerHTML="";
+  $("#todayCount").textContent = entries.length ? entries.length+(entries.length===1?" stavka":" stavki") : "";
+  if(!entries.length){ list.innerHTML=`<div class="empty">Još ništa nije uneto. Tapni namirnicu ispod.</div>`; return; }
+  entries.slice().reverse().forEach(e=>{
+    const food=state.foods.find(f=>f.id===e.foodId);
+    const icon = food&&food.img ? `<img class="ic" src="${food.img}">`
+      : `<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
+    const row=document.createElement("div"); row.className="item";
+    row.innerHTML=`${icon}<div class="nm"><b>${e.name}</b><small>${e.qty} g</small></div>
+      <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
+      <button class="del" data-id="${e.id}">✕</button>`;
+    row.querySelector(".del").onclick=async()=>{ await del("log",e.id); state.log=state.log.filter(x=>x.id!==e.id); render(); };
+    list.appendChild(row);
+  });
+}
+
+function renderTabs(){
+  const tabs=$("#tabs"); tabs.innerHTML="";
+  state.settings.tabs.forEach(name=>{
+    const b=document.createElement("button");
+    b.className="tab"+(name===state.activeTab?" active":"");
+    b.textContent=name;
+    b.onclick=()=>{ state.activeTab=name; renderTabs(); renderGrid(); };
+    tabs.appendChild(b);
+  });
+}
+
+function renderGrid(){
+  const grid=$("#grid"); grid.innerHTML="";
+  const foods = state.activeTab==="Sve" ? state.foods : state.foods.filter(f=>f.tab===state.activeTab);
+  foods.forEach(f=>{
+    const ph = f.img ? `<div class="ph"><img src="${f.img}"></div>`
+      : `<div class="ph"><span class="ph-txt">${f.emoji||f.name[0]}</span></div>`;
+    const kc=Math.round(f.per100.kcal*f.defaultQty/100);
+    const el=document.createElement("div"); el.className="food";
+    el.innerHTML=`${ph}<div class="fnm">${f.name}</div>
+      <div class="fkc">${kc} <span>kcal / ${f.defaultQty}g</span></div>
+      <button class="edit" data-id="${f.id}">✎</button>`;
+    el.onclick=ev=>{ if(ev.target.classList.contains("edit")) return; openQty(f); };
+    el.querySelector(".edit").onclick=ev=>{ ev.stopPropagation(); openAddFood(f); };
+    grid.appendChild(el);
+  });
+  const add=document.createElement("div"); add.className="food add";
+  add.innerHTML=`<div class="plus">+</div><div class="lbl">Nova</div>`;
+  add.onclick=()=>openAddFood();
+  grid.appendChild(add);
+}
+
+/* ---------- 14-day chart ---------- */
+const CHART_METRICS=[["kcal","Kalorije","var(--kcal)"],["protein","Proteini","var(--pro)"],["carbs","Ugljeni h.","var(--carb)"],["fat","Masti","var(--fat)"]];
+function renderChartChips(){
+  const c=$("#chartChips"); c.innerHTML="";
+  CHART_METRICS.forEach(([key,lab,col])=>{
+    const b=document.createElement("button");
+    const on=key===state.chartMetric;
+    b.className="chip"+(on?" active":"");
+    b.textContent=lab; if(on) b.style.background=col;
+    b.onclick=()=>{ state.chartMetric=key; renderChartChips(); renderChart(); };
+    c.appendChild(b);
+  });
+}
+function renderChart(){
+  const svg=$("#chart"); const W=340,H=170,pad=14, baseY=H-22, topY=10;
+  const days=[]; for(let i=13;i>=0;i--) days.push(shiftDate(todayKey(),-i));
+  const metric=state.chartMetric; const tgt=macroTargets()[metric];
+  const vals=days.map(d=>dayTotals(d)[metric]);
+  const max=Math.max(tgt*1.25, ...vals, 1);
+  const col=CHART_METRICS.find(m=>m[0]===metric)[2];
+  const bw=(W-pad*2)/14, gap=bw*0.26;
+  let html="";
+  // target line
+  const tY=baseY-(tgt/max)*(baseY-topY);
+  html+=`<line x1="${pad}" y1="${tY}" x2="${W-pad}" y2="${tY}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>`;
+  days.forEach((d,i)=>{
+    const v=vals[i]; const h=Math.max((v/max)*(baseY-topY),0);
+    const x=pad+i*bw+gap/2, w=bw-gap, y=baseY-h;
+    const over=v>tgt && tgt>0;
+    const fill = v===0 ? "var(--line)" : (over?"var(--over)":col);
+    html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5" fill="${fill}"/>`;
+    if(d===state.date){ html+=`<rect x="${x.toFixed(1)}" y="${(baseY+4).toFixed(1)}" width="${w.toFixed(1)}" height="3" rx="1.5" fill="var(--txt)"/>`; }
+    const dd=d.split("-")[2];
+    html+=`<text x="${(x+w/2).toFixed(1)}" y="${H-6}" fill="var(--faint)" font-size="8" text-anchor="middle" font-family="var(--body)">${dd}</text>`;
+  });
+  svg.innerHTML=html;
+  const pf=prettyDate(days[0]), pt=prettyDate(days[13]);
+  $("#chartFrom").textContent=pf.full.replace(/ \d{4}$/,"");
+  $("#chartTo").textContent="danas";
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+const ov=$("#ov"), sheet=$("#sheet");
+function openSheet(html){ sheet.innerHTML=`<div class="grab"></div>`+html; ov.classList.add("show"); }
+function closeSheet(){ ov.classList.remove("show"); }
+ov.addEventListener("click",e=>{ if(e.target===ov) closeSheet(); });
+
+/* ---- QTY modal ---- */
+let qtyState=null;
+function openQty(food){
+  qtyState={ food, qty:food.defaultQty };
+  const ph = food.img ? `<div class="qph"><img src="${food.img}"></div>` : `<div class="qph">${food.emoji||food.name[0]}</div>`;
+  openSheet(`
+    <div class="qty-hero">${ph}<h2>${food.name}</h2></div>
+    <div class="qty-val"><span class="n num" id="qN">${food.defaultQty}</span><span class="u">g</span></div>
+    <div class="qty-pills">
+      <button class="minus" data-d="-50">−50</button>
+      <button class="minus" data-d="-10">−10</button>
+      <button class="plus" data-d="10">+10</button>
+      <button class="plus" data-d="50">+50</button>
+    </div>
+    <div class="qty-macros" id="qMac"></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="qCancel">Otkaži</button>
+      <button class="btn kcal" id="qOk">Dodaj</button>
+    </div>
+    <div class="hint" style="text-align:center">Tapni broj da uneseš tačnu količinu.</div>
+  `);
+  updateQty();
+  sheet.querySelectorAll(".qty-pills button").forEach(b=>b.onclick=()=>{ qtyState.qty=Math.max(0,qtyState.qty+ +b.dataset.d); updateQty(); });
+  $("#qN").onclick=()=>{ const v=prompt("Količina (g):",qtyState.qty); if(v!==null&&!isNaN(+v)){ qtyState.qty=Math.max(0,Math.round(+v)); updateQty(); } };
+  $("#qCancel").onclick=closeSheet;
+  $("#qOk").onclick=addCurrentQty;
+}
+function updateQty(){
+  $("#qN").textContent=qtyState.qty;
+  const m=scaleFood(qtyState.food,qtyState.qty);
+  $("#qMac").innerHTML=`
+    <div class="qm"><div class="v" style="color:var(--kcal)">${Math.round(m.kcal)}</div><div class="l">kcal</div></div>
+    <div class="qm"><div class="v" style="color:var(--pro)">${m.protein.toFixed(1)}</div><div class="l">P (g)</div></div>
+    <div class="qm"><div class="v" style="color:var(--carb)">${m.carbs.toFixed(1)}</div><div class="l">UH (g)</div></div>
+    <div class="qm"><div class="v" style="color:var(--fat)">${m.fat.toFixed(1)}</div><div class="l">M (g)</div></div>`;
+}
+async function addCurrentQty(){
+  const {food,qty}=qtyState; const m=scaleFood(food,qty);
+  const entry={ date:state.date, foodId:food.id, name:food.name, qty,
+    kcal:m.kcal, protein:m.protein, carbs:m.carbs, fat:m.fat, ts:Date.now() };
+  const id=await put("log",entry); entry.id=id; state.log.push(entry);
+  closeSheet(); render(); toast(`Dodato: ${food.name}`);
+}
+
+/* ---- ADD / EDIT FOOD modal ---- */
+let foodImg=null;
+function openAddFood(existing=null){
+  foodImg = existing ? existing.img : null;
+  const tabsOpts=state.settings.tabs.filter(t=>t!=="Sve")
+    .map(t=>`<option ${existing&&existing.tab===t?"selected":""}>${t}</option>`).join("");
+  const p=existing?existing.per100:{kcal:"",protein:"",carbs:"",fat:""};
+  openSheet(`
+    <h2>${existing?"Izmeni namirnicu":"Nova namirnica"}</h2>
+    <div class="desc">Vrednosti se unose <b>na 100 g</b>. Default količina je koliko se doda na jedan tap.</div>
+
+    <div class="scan-box">
+      <p>📷 Skeniraj deklaraciju sa proizvoda — Claude pročita tablicu i popuni vrednosti na 100 g.</p>
+      <button class="btn" id="scanBtn">Skeniraj nutritivnu tablicu</button>
+      <div class="scan-status" id="scanStatus"></div>
+    </div>
+
+    <div class="img-prev" id="imgPrev">${foodImg?`<img src="${foodImg}">`:"bez slike"}</div>
+    <div class="img-picker">
+      <button id="pGallery"><span class="i">🖼️</span>Galerija</button>
+      <button id="pCamera"><span class="i">📸</span>Slikaj</button>
+      <button id="pUrl"><span class="i">🔗</span>URL</button>
+    </div>
+
+    <div class="field"><label>Naziv</label>
+      <input class="inp" id="fName" value="${existing?existing.name.replace(/"/g,'&quot;'):""}" placeholder="npr. Pileća prsa"></div>
+    <div class="row2">
+      <div class="field"><label>Tab / kategorija</label><select class="inp" id="fTab">${tabsOpts}</select></div>
+      <div class="field"><label>Default količina (g)</label><input class="inp" id="fQty" type="number" inputmode="numeric" value="${existing?existing.defaultQty:100}"></div>
+    </div>
+    <div class="field"><label>Na 100 g</label>
+      <div class="row4">
+        <input class="inp" id="fKcal" type="number" inputmode="decimal" placeholder="kcal" value="${p.kcal}">
+        <input class="inp" id="fPro" type="number" inputmode="decimal" placeholder="Proteini g" value="${p.protein}">
+        <input class="inp" id="fCarb" type="number" inputmode="decimal" placeholder="Ugljeni h. g" value="${p.carbs}">
+        <input class="inp" id="fFat" type="number" inputmode="decimal" placeholder="Masti g" value="${p.fat}">
+      </div>
+    </div>
+    <div class="btn-row">
+      ${existing?`<button class="btn danger" id="fDelete">Obriši</button>`:""}
+      <button class="btn kcal" id="fSave">${existing?"Sačuvaj izmene":"Dodaj namirnicu"}</button>
+    </div>
+  `);
+  $("#pGallery").onclick=()=>$("#fileGallery").click();
+  $("#pCamera").onclick=()=>$("#fileCamera").click();
+  $("#pUrl").onclick=()=>{ const u=prompt("Zalepi URL slike:"); if(u){ foodImg=u.trim(); refreshImgPrev(); } };
+  $("#scanBtn").onclick=()=>$("#fileScan").click();
+  $("#fSave").onclick=()=>saveFood(existing);
+  if(existing) $("#fDelete").onclick=async()=>{ if(confirm("Obrisati ovu namirnicu?")){ await del("foods",existing.id); state.foods=state.foods.filter(f=>f.id!==existing.id); closeSheet(); render(); } };
+}
+function refreshImgPrev(){ $("#imgPrev").innerHTML=foodImg?`<img src="${foodImg}">`:"bez slike"; }
+async function saveFood(existing){
+  const name=$("#fName").value.trim(); if(!name){ alert("Unesi naziv."); return; }
+  const food={
+    id: existing?existing.id:uid(), name, tab:$("#fTab").value, img:foodImg||null,
+    emoji: existing?existing.emoji:null,
+    defaultQty: Math.max(1, Math.round(+$("#fQty").value||100)),
+    per100:{ kcal:+$("#fKcal").value||0, protein:+$("#fPro").value||0, carbs:+$("#fCarb").value||0, fat:+$("#fFat").value||0 }
+  };
+  await put("foods",food);
+  if(existing){ const i=state.foods.findIndex(f=>f.id===existing.id); state.foods[i]=food; }
+  else state.foods.push(food);
+  closeSheet(); render(); toast(existing?"Sačuvano":"Namirnica dodata");
+}
+
+/* ---- image handling ---- */
+function compressImage(file,cb){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const size=256; const c=document.createElement("canvas"); c.width=size; c.height=size;
+      const ctx=c.getContext("2d");
+      const s=Math.min(img.width,img.height); const sx=(img.width-s)/2, sy=(img.height-s)/2;
+      ctx.drawImage(img,sx,sy,s,s,0,0,size,size);
+      cb(c.toDataURL("image/jpeg",0.82));
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+$("#fileGallery").onchange=e=>{ if(e.target.files[0]) compressImage(e.target.files[0],d=>{foodImg=d;refreshImgPrev();}); e.target.value=""; };
+$("#fileCamera").onchange=e=>{ if(e.target.files[0]) compressImage(e.target.files[0],d=>{foodImg=d;refreshImgPrev();}); e.target.value=""; };
+
+/* ---- nutrition-label OCR via Claude ---- */
+$("#fileScan").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) scanLabel(f); };
+function fileToBase64(file){ return new Promise(res=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.readAsDataURL(file); }); }
+async function scanLabel(file){
+  const st=$("#scanStatus"); st.className="scan-status"; st.innerHTML=`<span class="spin"></span>Čitam tablicu…`;
+  try{
+    const b64=await fileToBase64(file);
+    const media=file.type||"image/jpeg";
+    const prompt="Ovo je nutritivna deklaracija sa prehrambenog proizvoda. Izvuci vrednosti NA 100 g (ili 100 ml). "+
+      "Ako su date po porciji a poznat je gramaž porcije, preračunaj na 100 g. Vrati ISKLJUČIVO čist JSON bez ikakvog teksta, "+
+      'oblika: {"kcal":<broj>,"protein":<broj>,"carbs":<broj>,"fat":<broj>}. Koristi tačku kao decimalni separator. '+
+      "Energiju daj u kcal (ako je samo kJ, podeli sa 4.184).";
+    const content=[ {type:"image",source:{type:"base64",media_type:media,data:b64}}, {type:"text",text:prompt} ];
+    const data=await callClaude([{role:"user",content}]);
+    const txt=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("").replace(/```json|```/g,"").trim();
+    const m=txt.match(/\{[\s\S]*\}/); if(!m) throw new Error("Nije prepoznata tablica.");
+    const r=JSON.parse(m[0]);
+    if(r.kcal!=null) $("#fKcal").value=Math.round(r.kcal);
+    if(r.protein!=null) $("#fPro").value=r.protein;
+    if(r.carbs!=null) $("#fCarb").value=r.carbs;
+    if(r.fat!=null) $("#fFat").value=r.fat;
+    st.className="scan-status ok"; st.textContent="✓ Popunjeno — proveri vrednosti.";
+  }catch(err){
+    st.className="scan-status err";
+    st.textContent = /401|key|x-api/i.test(String(err)) ? "Greška: unesi Anthropic API ključ u Podešavanjima." : "Greška: "+(err.message||err);
+  }
+}
+async function callClaude(messages){
+  const s=state.settings; const useKey=s.apiKey && s.apiKey.trim();
+  const headers={"Content-Type":"application/json"};
+  const body={ model: useKey ? (s.model||"claude-3-5-sonnet-20241022") : "claude-sonnet-4-20250514", max_tokens:1000, messages };
+  if(useKey){ headers["x-api-key"]=s.apiKey.trim(); headers["anthropic-version"]="2023-06-01"; headers["anthropic-dangerous-direct-browser-access"]="true"; }
+  const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers,body:JSON.stringify(body)});
+  if(!r.ok){ throw new Error((r.status===401?"401 ":"")+"API "+r.status); }
+  return r.json();
+}
+
+/* ---- SETTINGS modal ---- */
+function openSettings(){
+  const s=state.settings;
+  openSheet(`
+    <h2>Podešavanja</h2>
+    <div class="desc">Dnevni cilj i raspodela makronutrijenata.</div>
+    <div class="field"><label>Dnevni cilj (kcal)</label>
+      <input class="inp" id="sKcal" type="number" inputmode="numeric" value="${s.calorieTarget}"></div>
+    <div class="field"><label>Raspodela makroa (%)</label>
+      <div class="row4" style="grid-template-columns:repeat(3,1fr)">
+        <input class="inp" id="sP" type="number" inputmode="numeric" value="${s.proteinPct}" placeholder="Proteini">
+        <input class="inp" id="sC" type="number" inputmode="numeric" value="${s.carbsPct}" placeholder="UH">
+        <input class="inp" id="sF" type="number" inputmode="numeric" value="${s.fatPct}" placeholder="Masti">
+      </div>
+      <div class="pct-warn" id="pctWarn">Zbir procenata nije 100%.</div>
+      <div class="hint">P / UH / Masti — gramaži se računaju automatski (4/4/9 kcal/g).</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="field"><label>Tabovi (kategorije)</label>
+      <div class="tabman" id="tabMan"></div>
+      <div style="display:flex;gap:8px">
+        <input class="inp" id="newTab" placeholder="Novi tab…">
+        <button class="btn ghost" id="addTab" style="width:auto;padding:0 18px">+</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="field"><label>Anthropic API ključ (za skeniranje tablica)</label>
+      <input class="inp" id="sKey" type="password" value="${s.apiKey||""}" placeholder="sk-ant-…" autocomplete="off"></div>
+    <div class="field"><label>Model</label>
+      <input class="inp" id="sModel" value="${s.model||"claude-3-5-sonnet-20241022"}"></div>
+    <div class="hint" style="margin-bottom:14px">Ključ se čuva samo lokalno na ovom telefonu (u bazi aplikacije).</div>
+
+    <button class="btn kcal" id="sSave">Sačuvaj</button>
+
+    <div class="divider"></div>
+    <label style="font-size:12px;color:var(--muted);font-weight:600;display:block;margin-bottom:8px">Bekap</label>
+    <div class="btn-row">
+      <button class="btn ghost" id="bExport">⬇︎ Izvezi (JSON)</button>
+      <button class="btn ghost" id="bImport">⬆︎ Uvezi</button>
+    </div>
+    <div class="danger-zone">
+      <button class="btn danger" id="bReset" style="margin-top:10px">Obriši sve podatke</button>
+    </div>
+  `);
+  renderTabMan();
+  const chkPct=()=>{ const sum=(+$("#sP").value)+(+$("#sC").value)+(+$("#sF").value); $("#pctWarn").style.display=sum===100?"none":"block"; };
+  ["sP","sC","sF"].forEach(id=>$("#"+id).oninput=chkPct); chkPct();
+  $("#addTab").onclick=()=>{ const v=$("#newTab").value.trim(); if(v&&!state.settings.tabs.includes(v)){ state.settings.tabs.push(v); $("#newTab").value=""; renderTabMan(); } };
+  $("#sSave").onclick=async()=>{
+    state.settings.calorieTarget=Math.max(0,Math.round(+$("#sKcal").value||0));
+    state.settings.proteinPct=+$("#sP").value||0; state.settings.carbsPct=+$("#sC").value||0; state.settings.fatPct=+$("#sF").value||0;
+    state.settings.apiKey=$("#sKey").value.trim(); state.settings.model=$("#sModel").value.trim()||"claude-3-5-sonnet-20241022";
+    await saveSettings(); if(!state.settings.tabs.includes(state.activeTab)) state.activeTab="Sve";
+    closeSheet(); render(); toast("Sačuvano");
+  };
+  $("#bExport").onclick=exportData;
+  $("#bImport").onclick=()=>$("#fileImport").click();
+  $("#bReset").onclick=async()=>{ if(confirm("Obrisati SVE namirnice i istoriju? Ovo se ne može vratiti.")){ await clearStore("foods"); await clearStore("log"); state.foods=[]; state.log=[]; closeSheet(); render(); toast("Obrisano"); } };
+}
+function renderTabMan(){
+  const w=$("#tabMan"); w.innerHTML="";
+  state.settings.tabs.forEach((t,i)=>{
+    const el=document.createElement("div"); el.className="t";
+    el.innerHTML=`<span>${t}</span>`;
+    if(t!=="Sve"){ const b=document.createElement("button"); b.textContent="✕";
+      b.onclick=()=>{ state.settings.tabs.splice(i,1); renderTabMan(); }; el.appendChild(b); }
+    w.appendChild(el);
+  });
+}
+
+/* ---- backup ---- */
+async function exportData(){
+  const data={ version:1, exported:new Date().toISOString(),
+    settings:state.settings, foods:await getAll("foods"), log:await getAll("log") };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download="kalorije-bekap-"+todayKey()+".json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000); toast("Bekap izvezen");
+}
+$("#fileImport").onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    const data=JSON.parse(await f.text());
+    if(!confirm("Uvezi bekap? Trenutni podaci se zamenjuju.")) return;
+    await clearStore("foods"); await clearStore("log");
+    if(data.settings){ state.settings={...DEFAULT_SETTINGS,...data.settings}; await saveSettings(); }
+    for(const fd of (data.foods||[])) await put("foods",fd);
+    for(const lg of (data.log||[])){ delete lg.id; await put("log",lg); }
+    state.foods=await getAll("foods"); state.log=await getAll("log");
+    closeSheet(); render(); toast("Bekap uvezen");
+  }catch(err){ alert("Neispravan fajl: "+err.message); }
+};
+
+/* ============================================================
+   misc UI
+   ============================================================ */
+let toastT;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1800); }
+$("#prevDay").onclick=()=>{ state.date=shiftDate(state.date,-1); render(); };
+$("#nextDay").onclick=()=>{ if(state.date<todayKey()){ state.date=shiftDate(state.date,1); render(); } };
+$("#todayBtn").onclick=()=>{ state.date=todayKey(); render(); };
+$("#openSettings").onclick=openSettings;
+$("#openAddFood").onclick=()=>openAddFood();
+
+/* ---- home-screen icon (generated) ---- */
+function makeIcon(){
+  const c=document.createElement("canvas"); c.width=c.height=180; const x=c.getContext("2d");
+  x.fillStyle="#15140f"; x.fillRect(0,0,180,180);
+  x.strokeStyle="#ff8a3d"; x.lineWidth=14; x.lineCap="round";
+  x.beginPath(); x.arc(90,90,58,-Math.PI/2, Math.PI*0.95); x.stroke();
+  x.fillStyle="#f4f0e6"; x.font="700 64px -apple-system,sans-serif"; x.textAlign="center"; x.textBaseline="middle";
+  x.fillText("kc",90,94);
+  const l=document.createElement("link"); l.rel="apple-touch-icon"; l.href=c.toDataURL("image/png"); document.head.appendChild(l);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+(async function init(){
+  makeIcon();
+  await openDB();
+  await loadSettings();
+  await maybeSeed();
+  state.foods=await getAll("foods");
+  state.log=await getAll("log");
+  renderChartChips();
+  render();
+})();
+</script>
+</body>
+</html>
