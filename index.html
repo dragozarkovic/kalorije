@@ -109,6 +109,9 @@
     display:flex;align-items:center;justify-content:center;}
   .food .fkc{font-family:var(--display);font-weight:700;font-size:12px;color:var(--kcal);text-align:center;}
   .food .fkc span{color:var(--faint);font-family:var(--body);font-weight:500;}
+  .food .fav{position:absolute;top:5px;left:5px;width:24px;height:24px;border-radius:8px;
+    background:rgba(0,0,0,.38);font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--faint);}
+  .food .fav.on{color:#ff6b81;}
   .food .edit{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:8px;background:rgba(0,0,0,.45);
     color:var(--txt);font-size:13px;display:flex;align-items:center;justify-content:center;opacity:.85;}
   .food.add{align-items:center;justify-content:center;border-style:dashed;color:var(--muted);min-height:120px;}
@@ -472,7 +475,10 @@ function renderTabs(){
 
 function renderGrid(){
   const grid=$("#grid"); grid.innerHTML="";
-  const foods = state.activeTab==="Sve" ? state.foods : state.foods.filter(f=>f.tab===state.activeTab);
+  let foods;
+  if(state.activeTab==="Moje") foods=state.foods.filter(f=>f.favorite);
+  else if(state.activeTab==="Sve") foods=state.foods;
+  else foods=state.foods.filter(f=>f.tab===state.activeTab);
   foods.forEach(f=>{
     const ph = f.img ? `<div class="ph"><img src="${f.img}"></div>`
       : `<div class="ph"><span class="ph-txt">${f.emoji||f.name[0]}</span></div>`;
@@ -480,15 +486,24 @@ function renderGrid(){
     const el=document.createElement("div"); el.className="food";
     el.innerHTML=`${ph}<div class="fnm">${f.name}</div>
       <div class="fkc">${kc} <span>kcal / ${f.defaultQty}g</span></div>
+      <button class="fav${f.favorite?' on':''}" data-id="${f.id}">${f.favorite?'♥':'♡'}</button>
       <button class="edit" data-id="${f.id}">✎</button>`;
-    el.onclick=ev=>{ if(ev.target.classList.contains("edit")) return; openQty(f); };
+    el.onclick=ev=>{ if(ev.target.classList.contains("edit")||ev.target.classList.contains("fav")) return; openQty(f); };
     el.querySelector(".edit").onclick=ev=>{ ev.stopPropagation(); openAddFood(f); };
+    el.querySelector(".fav").onclick=ev=>{ ev.stopPropagation(); toggleFavorite(f); };
     grid.appendChild(el);
   });
   const add=document.createElement("div"); add.className="food add";
   add.innerHTML=`<div class="plus">+</div><div class="lbl">Nova</div>`;
   add.onclick=()=>openAddFood();
   grid.appendChild(add);
+}
+async function toggleFavorite(food){
+  food.favorite=!food.favorite;
+  await put("foods",food);
+  const i=state.foods.findIndex(f=>f.id===food.id); if(i>=0) state.foods[i]=food;
+  renderGrid();
+  toast(food.favorite?"Dodato u Moje":"Uklonjeno iz Moje");
 }
 
 /* ---------- 14-day chart ---------- */
@@ -693,7 +708,7 @@ async function addCurrentQty(){
 let foodImg=null;
 function openAddFood(existing=null){
   foodImg = existing ? existing.img : null;
-  const tabsOpts=state.settings.tabs.filter(t=>t!=="Sve")
+  const tabsOpts=state.settings.tabs.filter(t=>t!=="Sve"&&t!=="Moje")
     .map(t=>`<option ${existing&&existing.tab===t?"selected":""}>${t}</option>`).join("");
   const p=existing?existing.per100:{kcal:"",protein:"",carbs:"",fat:""};
   openSheet(`
@@ -721,10 +736,14 @@ function openAddFood(existing=null){
     </div>
     <div class="field"><label>Na 100 g</label>
       <div class="row4">
-        <input class="inp" id="fKcal" type="text" inputmode="decimal" placeholder="kcal" value="${p.kcal}">
-        <input class="inp" id="fPro" type="text" inputmode="decimal" placeholder="Proteini g" value="${p.protein}">
-        <input class="inp" id="fCarb" type="text" inputmode="decimal" placeholder="Ugljeni h. g" value="${p.carbs}">
-        <input class="inp" id="fFat" type="text" inputmode="decimal" placeholder="Masti g" value="${p.fat}">
+        <div class="field" style="margin:0"><label>Kalorije (kcal)</label>
+          <input class="inp" id="fKcal" type="text" inputmode="decimal" value="${p.kcal}" placeholder="0"></div>
+        <div class="field" style="margin:0"><label>Proteini (g)</label>
+          <input class="inp" id="fPro" type="text" inputmode="decimal" value="${p.protein}" placeholder="0"></div>
+        <div class="field" style="margin:0"><label>Ugljeni h. (g)</label>
+          <input class="inp" id="fCarb" type="text" inputmode="decimal" value="${p.carbs}" placeholder="0"></div>
+        <div class="field" style="margin:0"><label>Masti (g)</label>
+          <input class="inp" id="fFat" type="text" inputmode="decimal" value="${p.fat}" placeholder="0"></div>
       </div>
     </div>
     <div class="btn-row">
