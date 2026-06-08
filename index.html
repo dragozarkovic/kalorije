@@ -214,6 +214,21 @@
     background:var(--txt);color:var(--bg);padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;
     z-index:90;opacity:0;transition:.25s;pointer-events:none;white-space:nowrap;}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  #cropper{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px;}
+  #cropper canvas{border-radius:18px;border:2px solid rgba(255,255,255,.18);touch-action:none;display:block;}
+  #cropper .crop-hint{color:rgba(255,255,255,.45);font-size:13px;font-family:var(--body);}
+  #cropper .crop-btns{display:flex;gap:12px;width:100%;}
+  #cropper .crop-btns button{flex:1;padding:15px;border-radius:14px;font-family:var(--display);font-weight:700;font-size:15px;border:none;cursor:pointer;}
+  #cropper .crop-cancel{background:rgba(255,255,255,.12);color:#fff;}
+  #cropper .crop-confirm{background:var(--kcal);color:#1a1206;}
+  .wk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:16px;}
+  .wk-tile{background:var(--surface);border:1.5px solid var(--line);border-radius:16px;padding:12px 6px;
+    display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;cursor:pointer;}
+  .wk-tile:active{transform:scale(.95);}
+  .wk-tile.sel{border-color:var(--pro);background:rgba(70,211,154,.13);}
+  .wk-tile .we{font-size:30px;line-height:1;}
+  .wk-tile .wn{font-size:11.5px;font-weight:600;color:var(--muted);}
+  .wk-tile.sel .wn{color:var(--pro);}
 </style>
 </head>
 <body>
@@ -239,6 +254,7 @@
         <div class="big num" id="kcalNow">0</div>
         <div class="sub">od <span id="kcalTgt">2000</span></div>
         <div class="unit">kcal</div>
+        <div class="unit" id="kcalBurned" style="display:none;color:var(--pro);margin-top:2px;font-size:9px;"></div>
       </div>
     </div>
     <div class="macros" id="macroBars"></div>
@@ -257,6 +273,7 @@
   <div class="actions">
     <button class="act" id="openSettings">⚙︎ Podešavanja</button>
     <button class="act" id="openAddFood">＋ Nova namirnica</button>
+    <button class="act full" id="openWorkout">💪 Dodaj trening</button>
   </div>
 
   <!-- CHART -->
@@ -283,14 +300,15 @@
    KALORIJE — lični PWA tracker  (single file, IndexedDB)
    ============================================================ */
 const $ = s => document.querySelector(s);
-const DEFAULT_TABS = ["Sve","Meso i riba","Mleko i sir","Žitarice i hleb","Povrće","Voće","Orašasti i masti","Napici","Slatkiši","Moji obroci"];
+const DEFAULT_TABS = ["Moje","Meso i riba","Mleko i sir","Žitarice i hleb","Povrće","Voće","Orašasti i masti","Napici","Slatkiši","Sve"];
 const DEFAULT_SETTINGS = {
   calorieTarget: 2000, proteinPct: 30, carbsPct: 40, fatPct: 30,
-  tabs: DEFAULT_TABS.slice(), apiKey: "", model: "claude-3-5-sonnet-20241022"
+  tabs: DEFAULT_TABS.slice(), apiKey: "", model: "claude-3-5-sonnet-20241022",
+  workouts: [{name:"Šetnja",emoji:"🚶"},{name:"Fudbal",emoji:"⚽"},{name:"Bicikl",emoji:"🚴"},{name:"Sobni bicikl",emoji:"🚲"},{name:"Stoni tenis",emoji:"🏓"},{name:"Plivanje",emoji:"🏊"}]
 };
 const MACRO = { protein:{c:"var(--pro)",l:"Proteini",k:4}, carbs:{c:"var(--carb)",l:"Ugljeni h.",k:4}, fat:{c:"var(--fat)",l:"Masti",k:9} };
 
-let state = { settings:{...DEFAULT_SETTINGS}, foods:[], log:[], date:todayKey(), activeTab:"Sve", chartMetric:"kcal" };
+let state = { settings:{...DEFAULT_SETTINGS}, foods:[], log:[], date:todayKey(), activeTab:"Moje", chartMetric:"kcal" };
 
 /* ---------- date helpers ---------- */
 function todayKey(d=new Date()){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
@@ -325,8 +343,17 @@ async function loadSettings(){
   const all=await getAll("settings"); const s=all.find(x=>x.k==="app");
   if(s) state.settings={...DEFAULT_SETTINGS, ...s.v};
   if(!Array.isArray(state.settings.tabs)||!state.settings.tabs.length) state.settings.tabs=DEFAULT_TABS.slice();
+  if(!Array.isArray(state.settings.workouts)||!state.settings.workouts.length) state.settings.workouts=DEFAULT_SETTINGS.workouts.slice();
 }
 async function saveSettings(){ await put("settings",{k:"app", v:state.settings}); }
+function migrateTabs(tabs){
+  let t=tabs.map(x=>x==="Moji obroci"?"Moje":x);
+  const mi=t.indexOf("Moje");
+  if(mi>0){t.splice(mi,1);t.unshift("Moje");}else if(mi===-1) t.unshift("Moje");
+  const si=t.indexOf("Sve");
+  if(si!==-1&&si!==t.length-1){t.splice(si,1);t.push("Sve");}else if(si===-1) t.push("Sve");
+  return t;
+}
 
 /* ---------- seed data on first run ---------- */
 async function maybeSeed(){
@@ -357,8 +384,11 @@ function macroTargets(){
 }
 function dayEntries(key=state.date){ return state.log.filter(e=>e.date===key); }
 function dayTotals(key=state.date){
-  const t={kcal:0,protein:0,carbs:0,fat:0};
-  for(const e of dayEntries(key)){ t.kcal+=e.kcal; t.protein+=e.protein; t.carbs+=e.carbs; t.fat+=e.fat; }
+  const t={kcal:0,protein:0,carbs:0,fat:0,burned:0};
+  for(const e of dayEntries(key)){
+    if(e.isWorkout){ t.burned+=e.kcal; }
+    else{ t.kcal+=e.kcal; t.protein+=e.protein; t.carbs+=e.carbs; t.fat+=e.fat; }
+  }
   for(const k in t) t[k]=Math.round(t[k]);
   return t;
 }
@@ -382,14 +412,17 @@ function renderHeader(){
 
 function renderStatus(){
   const t=dayTotals(), tgt=macroTargets();
-  // kcal ring
+  const burned=t.burned||0;
+  const effectiveTgt=tgt.kcal+burned;
   const C=2*Math.PI*50;
-  const arc=$("#kcalArc"); const ratio=Math.min(t.kcal/Math.max(tgt.kcal,1),1);
+  const arc=$("#kcalArc"); const ratio=Math.min(t.kcal/Math.max(effectiveTgt,1),1);
   arc.style.strokeDasharray=C; arc.style.strokeDashoffset=C*(1-ratio);
-  arc.style.stroke = t.kcal>tgt.kcal ? "var(--over)" : "var(--kcal)";
+  arc.style.stroke = t.kcal>effectiveTgt ? "var(--over)" : "var(--kcal)";
   $("#kcalNow").textContent=t.kcal;
-  $("#kcalTgt").textContent=tgt.kcal;
-  // macro bars
+  $("#kcalTgt").textContent=effectiveTgt;
+  const be=$("#kcalBurned");
+  if(burned>0){be.textContent=`💪 +${burned} kcal`;be.style.display='block';}
+  else{be.style.display='none';}
   const wrap=$("#macroBars"); wrap.innerHTML="";
   for(const key of ["protein","carbs","fat"]){
     const cur=t[key], tg=tgt[key], pct=Math.min(cur/Math.max(tg,1)*100,100), over=cur>tg;
@@ -407,13 +440,20 @@ function renderToday(){
   $("#todayCount").textContent = entries.length ? entries.length+(entries.length===1?" stavka":" stavki") : "";
   if(!entries.length){ list.innerHTML=`<div class="empty">Još ništa nije uneto. Tapni namirnicu ispod.</div>`; return; }
   entries.slice().reverse().forEach(e=>{
-    const food=state.foods.find(f=>f.id===e.foodId);
-    const icon = food&&food.img ? `<img class="ic" src="${food.img}">`
-      : `<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
     const row=document.createElement("div"); row.className="item";
-    row.innerHTML=`${icon}<div class="nm"><b>${e.name}</b><small>${e.qty} g</small></div>
-      <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
-      <button class="del" data-id="${e.id}">✕</button>`;
+    if(e.isWorkout){
+      row.innerHTML=`<div class="ic">${e.workoutEmoji||'💪'}</div>
+        <div class="nm"><b>${e.workoutName||e.name}</b><small>trening</small></div>
+        <div class="kc" style="color:var(--pro)">-${Math.round(e.kcal)}<small>kcal</small></div>
+        <button class="del" data-id="${e.id}">✕</button>`;
+    } else {
+      const food=state.foods.find(f=>f.id===e.foodId);
+      const icon = food&&food.img ? `<img class="ic" src="${food.img}">`
+        : `<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
+      row.innerHTML=`${icon}<div class="nm"><b>${e.name}</b><small>${e.qty} g</small></div>
+        <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
+        <button class="del" data-id="${e.id}">✕</button>`;
+    }
     row.querySelector(".del").onclick=async()=>{ await del("log",e.id); state.log=state.log.filter(x=>x.id!==e.id); render(); };
     list.appendChild(row);
   });
@@ -452,42 +492,94 @@ function renderGrid(){
 }
 
 /* ---------- 14-day chart ---------- */
-const CHART_METRICS=[["kcal","Kalorije","var(--kcal)"],["protein","Proteini","var(--pro)"],["carbs","Ugljeni h.","var(--carb)"],["fat","Masti","var(--fat)"]];
+const CHART_METRICS=[["all","Sve",""],["kcal","Kalorije","var(--kcal)"],["protein","Proteini","var(--pro)"],["carbs","Ugljeni h.","var(--carb)"],["fat","Masti","var(--fat)"]];
 function renderChartChips(){
   const c=$("#chartChips"); c.innerHTML="";
   CHART_METRICS.forEach(([key,lab,col])=>{
     const b=document.createElement("button");
     const on=key===state.chartMetric;
     b.className="chip"+(on?" active":"");
-    b.textContent=lab; if(on) b.style.background=col;
+    b.textContent=lab;
+    if(on && col) b.style.background=col;
+    else if(on){ b.style.background="var(--txt)"; b.style.color="var(--bg)"; }
     b.onclick=()=>{ state.chartMetric=key; renderChartChips(); renderChart(); };
     c.appendChild(b);
   });
 }
 function renderChart(){
-  const svg=$("#chart"); const W=340,H=170,pad=14, baseY=H-22, topY=10;
+  const svg=$("#chart");
+  const W=340,H=170,pl=30,pr=10,pt=16,pb=22;
+  const W2=W-pl-pr,H2=H-pt-pb;
   const days=[]; for(let i=13;i>=0;i--) days.push(shiftDate(todayKey(),-i));
-  const metric=state.chartMetric; const tgt=macroTargets()[metric];
-  const vals=days.map(d=>dayTotals(d)[metric]);
-  const max=Math.max(tgt*1.25, ...vals, 1);
-  const col=CHART_METRICS.find(m=>m[0]===metric)[2];
-  const bw=(W-pad*2)/14, gap=bw*0.26;
+  const tgt=macroTargets();
+  const xPos=i=>pl+(i/13)*W2;
   let html="";
-  // target line
-  const tY=baseY-(tgt/max)*(baseY-topY);
-  html+=`<line x1="${pad}" y1="${tY}" x2="${W-pad}" y2="${tY}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>`;
+
+  if(state.chartMetric==="all"){
+    const META=[["kcal","var(--kcal)","Kcal"],["protein","var(--pro)","P"],["carbs","var(--carb)","UH"],["fat","var(--fat)","M"]];
+    const maxPct=150;
+    const yPos=v=>pt+H2*(1-Math.min(Math.max(v,0),maxPct)/maxPct);
+    // 100% target line
+    const ty=yPos(100);
+    html+=`<line x1="${pl}" y1="${ty.toFixed(1)}" x2="${(W-pr).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    html+=`<text x="${(pl-3).toFixed(1)}" y="${(ty+3.5).toFixed(1)}" fill="var(--faint)" font-size="7" text-anchor="end">100%</text>`;
+    // legend
+    META.forEach(([k,col,lb],i)=>{
+      html+=`<circle cx="${(pl+i*72+4).toFixed(1)}" cy="8" r="3" fill="${col}"/>`;
+      html+=`<text x="${(pl+i*72+10).toFixed(1)}" y="11" fill="var(--muted)" font-size="8">${lb}</text>`;
+    });
+    // lines
+    META.forEach(([key,col])=>{
+      const t=tgt[key]||1;
+      const vals=days.map(d=>{ const v=dayTotals(d)[key]; return v>0?Math.round(v/t*100):0; });
+      const pts=vals.map((v,i)=>({x:xPos(i),y:yPos(v)}));
+      const d=pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+      html+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
+      vals.forEach((v,i)=>{
+        if(v===0) return;
+        const isT=days[i]===state.date;
+        html+=`<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(v).toFixed(1)}" r="${isT?4:2}" fill="${col}" opacity="${isT?1:.65}"/>`;
+      });
+    });
+  } else {
+    const key=state.chartMetric;
+    const col=CHART_METRICS.find(m=>m[0]===key)[2];
+    const t=tgt[key]||1;
+    const vals=days.map(d=>dayTotals(d)[key]);
+    const maxV=Math.max(t*1.35,...vals,1);
+    const yPos=v=>pt+H2*(1-Math.max(v,0)/maxV);
+    // fill
+    const fp=`M${xPos(0).toFixed(1)},${yPos(0).toFixed(1)} `+vals.map((v,i)=>`L${xPos(i).toFixed(1)},${yPos(v).toFixed(1)}`).join(' ')+` L${xPos(13).toFixed(1)},${yPos(0).toFixed(1)} Z`;
+    html+=`<path d="${fp}" fill="${col}" opacity=".07"/>`;
+    // dashed target
+    const ty=yPos(t);
+    html+=`<line x1="${pl}" y1="${ty.toFixed(1)}" x2="${(W-pr).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="6 4" opacity=".4"/>`;
+    html+=`<text x="${(pl-3).toFixed(1)}" y="${(ty+3.5).toFixed(1)}" fill="var(--faint)" font-size="7" text-anchor="end">${t}</text>`;
+    // solid line
+    const lp=vals.map((v,i)=>(i===0?'M':'L')+xPos(i).toFixed(1)+','+yPos(v).toFixed(1)).join(' ');
+    html+=`<path d="${lp}" fill="none" stroke="${col}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // dots
+    vals.forEach((v,i)=>{
+      const isT=days[i]===state.date;
+      if(v===0&&!isT) return;
+      const cx=xPos(i).toFixed(1),cy=yPos(v).toFixed(1);
+      if(isT){
+        html+=`<circle cx="${cx}" cy="${cy}" r="5" fill="${col}"/>`;
+        html+=`<circle cx="${cx}" cy="${cy}" r="8" fill="none" stroke="${col}" stroke-width="1" opacity=".35"/>`;
+      } else {
+        html+=`<circle cx="${cx}" cy="${cy}" r="2.5" fill="${col}" opacity=".7"/>`;
+      }
+    });
+  }
+  // X axis date labels
   days.forEach((d,i)=>{
-    const v=vals[i]; const h=Math.max((v/max)*(baseY-topY),0);
-    const x=pad+i*bw+gap/2, w=bw-gap, y=baseY-h;
-    const over=v>tgt && tgt>0;
-    const fill = v===0 ? "var(--line)" : (over?"var(--over)":col);
-    html+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5" fill="${fill}"/>`;
-    if(d===state.date){ html+=`<rect x="${x.toFixed(1)}" y="${(baseY+4).toFixed(1)}" width="${w.toFixed(1)}" height="3" rx="1.5" fill="var(--txt)"/>`; }
-    const dd=d.split("-")[2];
-    html+=`<text x="${(x+w/2).toFixed(1)}" y="${H-6}" fill="var(--faint)" font-size="8" text-anchor="middle" font-family="var(--body)">${dd}</text>`;
+    if(i%2!==0&&i!==13) return;
+    const isT=d===state.date;
+    const dd=+d.split('-')[2];
+    html+=`<text x="${xPos(i).toFixed(1)}" y="${H-4}" fill="${isT?'var(--txt)':'var(--faint)'}" font-size="${isT?9:8}" text-anchor="middle" font-weight="${isT?600:400}">${dd}.</text>`;
   });
   svg.innerHTML=html;
-  const pf=prettyDate(days[0]), pt=prettyDate(days[13]);
+  const pf=prettyDate(days[0]);
   $("#chartFrom").textContent=pf.full.replace(/ \d{4}$/,"");
   $("#chartTo").textContent="danas";
 }
@@ -498,6 +590,47 @@ function renderChart(){
 const ov=$("#ov"), sheet=$("#sheet");
 function openSheet(html){ sheet.innerHTML=`<div class="grab-row"><div class="grab"></div><button class="sheet-close" onclick="closeSheet()">✕</button></div>`+html; ov.classList.add("show"); }
 function closeSheet(){ sheet.style.transform=''; ov.classList.remove("show"); }
+
+/* ---- WORKOUT modal ---- */
+let wkSelected=null;
+function openWorkout(){
+  wkSelected=state.settings.workouts[0]||null;
+  renderWorkoutSheet();
+}
+function renderWorkoutSheet(){
+  const tiles=state.settings.workouts.map(w=>`
+    <div class="wk-tile${wkSelected&&wkSelected.name===w.name?' sel':''}" data-name="${w.name}" data-emoji="${w.emoji}">
+      <div class="we">${w.emoji}</div><div class="wn">${w.name}</div>
+    </div>`).join('');
+  openSheet(`
+    <h2>Dodaj trening</h2>
+    <div class="desc">Aktivne kalorije = narandžasti prsten na iWatchu (ne totalne).</div>
+    <div class="wk-grid" id="wkGrid">${tiles}</div>
+    <div class="field"><label>Aktivne kalorije (kcal)</label>
+      <input class="inp" id="wKcal" type="text" inputmode="numeric" placeholder="npr. 320"></div>
+    <div class="btn-row">
+      <button class="btn ghost" onclick="closeSheet()">Otkaži</button>
+      <button class="btn kcal" id="wkAdd">Dodaj</button>
+    </div>
+  `);
+  sheet.querySelectorAll('.wk-tile').forEach(t=>{
+    t.onclick=()=>{
+      wkSelected={name:t.dataset.name,emoji:t.dataset.emoji};
+      sheet.querySelectorAll('.wk-tile').forEach(x=>x.classList.remove('sel'));
+      t.classList.add('sel');
+    };
+  });
+  $("#wkAdd").onclick=addWorkout;
+}
+async function addWorkout(){
+  const kcal=parseNum($("#wKcal").value);
+  if(!kcal||kcal<=0){alert("Unesi aktivne kalorije.");return;}
+  if(!wkSelected){alert("Odaberi tip treninga.");return;}
+  const entry={date:state.date,isWorkout:true,workoutName:wkSelected.name,
+    workoutEmoji:wkSelected.emoji,name:wkSelected.name,kcal,ts:Date.now()};
+  const id=await put("log",entry); entry.id=id; state.log.push(entry);
+  closeSheet(); render(); toast(`Trening dodat: -${kcal} kcal`);
+}
 ov.addEventListener("click",e=>{ if(e.target===ov) closeSheet(); });
 let _ty0=0,_ts0=0;
 sheet.addEventListener('touchstart',e=>{_ty0=e.touches[0].clientY;_ts0=sheet.scrollTop;},{passive:true});
@@ -637,8 +770,69 @@ function compressImage(file,cb){
   };
   reader.readAsDataURL(file);
 }
-$("#fileGallery").onchange=e=>{ if(e.target.files[0]) compressImage(e.target.files[0],d=>{foodImg=d;refreshImgPrev();}); e.target.value=""; };
-$("#fileCamera").onchange=e=>{ if(e.target.files[0]) compressImage(e.target.files[0],d=>{foodImg=d;refreshImgPrev();}); e.target.value=""; };
+function showCropper(srcURL,onDone){
+  const cs=Math.min(window.innerWidth-32,window.innerHeight-200,440);
+  const div=document.createElement('div'); div.id='cropper';
+  div.innerHTML=`<div class="crop-hint">Prevuci i zumiraj pinch-om — kvadrat je isečak</div>
+    <canvas width="${cs}" height="${cs}" style="width:${cs}px;height:${cs}px"></canvas>
+    <div class="crop-btns" style="max-width:${cs}px">
+      <button class="crop-cancel">Otkaži</button>
+      <button class="crop-confirm">Iseci ✓</button>
+    </div>`;
+  document.body.appendChild(div);
+  const canvas=div.querySelector('canvas'), ctx=canvas.getContext('2d');
+  const img=new Image();
+  img.onload=()=>{
+    let scale=Math.max(cs/img.width,cs/img.height);
+    let tx=(cs-img.width*scale)/2, ty=(cs-img.height*scale)/2;
+    function clamp(){
+      const ms=Math.max(cs/img.width,cs/img.height); if(scale<ms) scale=ms;
+      const w=img.width*scale,h=img.height*scale;
+      if(tx>0)tx=0; if(tx+w<cs)tx=cs-w;
+      if(ty>0)ty=0; if(ty+h<cs)ty=cs-h;
+    }
+    function draw(){ ctx.clearRect(0,0,cs,cs); ctx.drawImage(img,tx,ty,img.width*scale,img.height*scale); }
+    clamp(); draw();
+    let ts={};
+    canvas.addEventListener('touchstart',e=>{e.preventDefault();for(const t of e.changedTouches)ts[t.identifier]={x:t.clientX,y:t.clientY};},{passive:false});
+    canvas.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      const pts=Array.from(e.touches);
+      if(pts.length===1){
+        const t=pts[0],p=ts[t.identifier];
+        if(p){tx+=t.clientX-p.x;ty+=t.clientY-p.y;}
+      }else if(pts.length===2){
+        const[a,b]=pts,pa=ts[a.identifier],pb=ts[b.identifier];
+        if(pa&&pb){
+          const d0=Math.hypot(pa.x-pb.x,pa.y-pb.y),d1=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+          const r=d1/Math.max(d0,1);
+          const rect=canvas.getBoundingClientRect();
+          const cx=(a.clientX+b.clientX)/2-rect.left,cy=(a.clientY+b.clientY)/2-rect.top;
+          tx=cx+(tx-cx)*r;ty=cy+(ty-cy)*r;scale*=r;
+        }
+      }
+      for(const t of e.changedTouches)ts[t.identifier]={x:t.clientX,y:t.clientY};
+      clamp();draw();
+    },{passive:false});
+    canvas.addEventListener('touchend',e=>{for(const t of e.changedTouches)delete ts[t.identifier];});
+    div.querySelector('.crop-confirm').onclick=()=>{
+      const out=document.createElement('canvas');out.width=out.height=256;
+      const s=256/cs;
+      out.getContext('2d').drawImage(img,tx*s,ty*s,img.width*scale*s,img.height*scale*s);
+      document.body.removeChild(div);
+      onDone(out.toDataURL('image/jpeg',0.82));
+    };
+    div.querySelector('.crop-cancel').onclick=()=>{document.body.removeChild(div);onDone(null);};
+  };
+  img.src=srcURL;
+}
+function readAndCrop(file,done){
+  const reader=new FileReader();
+  reader.onload=e=>showCropper(e.target.result,url=>{if(url)done(url);});
+  reader.readAsDataURL(file);
+}
+$("#fileGallery").onchange=e=>{ if(e.target.files[0]) readAndCrop(e.target.files[0],url=>{foodImg=url;refreshImgPrev();}); e.target.value=""; };
+$("#fileCamera").onchange=e=>{ if(e.target.files[0]) readAndCrop(e.target.files[0],url=>{foodImg=url;refreshImgPrev();}); e.target.value=""; };
 
 /* ---- nutrition-label OCR via Claude ---- */
 $("#fileScan").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) scanLabel(f); };
@@ -705,6 +899,16 @@ function openSettings(){
     </div>
 
     <div class="divider"></div>
+    <div class="field"><label>Treninzi</label>
+      <div class="tabman" id="wkMan"></div>
+      <div style="display:flex;gap:8px">
+        <input class="inp" id="wkEmoji" placeholder="🏃" style="max-width:58px;text-align:center">
+        <input class="inp" id="wkName" placeholder="Naziv treninga…">
+        <button class="btn ghost" id="addWk" style="width:auto;padding:0 14px">+</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
     <div class="field"><label>Anthropic API ključ (za skeniranje tablica)</label>
       <input class="inp" id="sKey" type="password" value="${s.apiKey||""}" placeholder="sk-ant-…" autocomplete="off"></div>
     <div class="field"><label>Model</label>
@@ -724,14 +928,21 @@ function openSettings(){
     </div>
   `);
   renderTabMan();
+  renderWorkoutMan();
   const chkPct=()=>{ const sum=(+$("#sP").value)+(+$("#sC").value)+(+$("#sF").value); $("#pctWarn").style.display=sum===100?"none":"block"; };
   ["sP","sC","sF"].forEach(id=>$("#"+id).oninput=chkPct); chkPct();
   $("#addTab").onclick=()=>{ const v=$("#newTab").value.trim(); if(v&&!state.settings.tabs.includes(v)){ state.settings.tabs.push(v); $("#newTab").value=""; renderTabMan(); } };
+  $("#addWk").onclick=()=>{
+    const nm=$("#wkName").value.trim(), em=$("#wkEmoji").value.trim()||"💪";
+    if(nm&&!state.settings.workouts.find(w=>w.name===nm)){
+      state.settings.workouts.push({name:nm,emoji:em}); $("#wkName").value=""; $("#wkEmoji").value=""; renderWorkoutMan();
+    }
+  };
   $("#sSave").onclick=async()=>{
     state.settings.calorieTarget=Math.max(0,Math.round(+$("#sKcal").value||0));
     state.settings.proteinPct=+$("#sP").value||0; state.settings.carbsPct=+$("#sC").value||0; state.settings.fatPct=+$("#sF").value||0;
     state.settings.apiKey=$("#sKey").value.trim(); state.settings.model=$("#sModel").value.trim()||"claude-3-5-sonnet-20241022";
-    await saveSettings(); if(!state.settings.tabs.includes(state.activeTab)) state.activeTab="Sve";
+    await saveSettings(); if(!state.settings.tabs.includes(state.activeTab)) state.activeTab="Moje";
     closeSheet(); render(); toast("Sačuvano");
   };
   $("#bExport").onclick=exportData;
@@ -745,6 +956,16 @@ function renderTabMan(){
     el.innerHTML=`<span>${t}</span>`;
     if(t!=="Sve"){ const b=document.createElement("button"); b.textContent="✕";
       b.onclick=()=>{ state.settings.tabs.splice(i,1); renderTabMan(); }; el.appendChild(b); }
+    w.appendChild(el);
+  });
+}
+function renderWorkoutMan(){
+  const w=$("#wkMan"); if(!w) return; w.innerHTML="";
+  state.settings.workouts.forEach((wk,i)=>{
+    const el=document.createElement("div"); el.className="t";
+    el.innerHTML=`<span>${wk.emoji} ${wk.name}</span>`;
+    const b=document.createElement("button"); b.textContent="✕";
+    b.onclick=()=>{ state.settings.workouts.splice(i,1); renderWorkoutMan(); }; el.appendChild(b);
     w.appendChild(el);
   });
 }
@@ -782,6 +1003,7 @@ $("#nextDay").onclick=()=>{ if(state.date<todayKey()){ state.date=shiftDate(stat
 $("#todayBtn").onclick=()=>{ state.date=todayKey(); render(); };
 $("#openSettings").onclick=openSettings;
 $("#openAddFood").onclick=()=>openAddFood();
+$("#openWorkout").onclick=openWorkout;
 
 /* ---- home-screen icon (generated) ---- */
 function makeIcon(){
@@ -801,6 +1023,7 @@ function makeIcon(){
   makeIcon();
   await openDB();
   await loadSettings();
+  state.settings.tabs=migrateTabs(state.settings.tabs); await saveSettings();
   await maybeSeed();
   state.foods=await getAll("foods");
   state.log=await getAll("log");
