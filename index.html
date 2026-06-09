@@ -22,8 +22,8 @@
     --txt:#f4f0e6;
     --muted:#9a978a;
     --faint:#6b685d;
-    --kcal:#ff8a3d;
-    --pro:#46d39a;
+    --kcal:#ff5f20;
+    --pro:#38a97b;
     --carb:#5b8def;
     --fat:#f5c24b;
     --over:#ff5d5d;
@@ -83,7 +83,12 @@
     display:flex;align-items:center;justify-content:center;font-family:var(--display);font-weight:700;color:var(--muted);font-size:14px;}
   .item .nm{flex:1;min-width:0;}
   .item .nm b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .item .nm small{color:var(--faint);font-size:11.5px;}
+  .item-macros{display:grid;grid-template-columns:repeat(4,1fr);margin-top:3px;gap:0 3px;}
+  .item-macros span{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .m-qty{color:var(--faint);}
+  .m-p{color:var(--pro);}
+  .m-c{color:var(--carb);}
+  .m-f{color:var(--fat);}
   .item .kc{font-family:var(--display);font-weight:700;font-size:15px;color:var(--kcal);}
   .item .kc small{display:block;font-family:var(--body);font-weight:500;font-size:10px;color:var(--faint);text-align:right;}
   .item .del{width:26px;height:26px;border-radius:8px;color:var(--faint);font-size:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
@@ -381,8 +386,8 @@ function parseNum(v){ return parseFloat(String(v).replace(",",".").replace(/[^\d
 /* ============================================================
    COMPUTE
    ============================================================ */
-function macroTargets(){
-  const s=state.settings, c=s.calorieTarget;
+function macroTargets(burned=0){
+  const s=state.settings, c=s.calorieTarget+(burned||0);
   return { kcal:c, protein:Math.round(c*s.proteinPct/100/4), carbs:Math.round(c*s.carbsPct/100/4), fat:Math.round(c*s.fatPct/100/9) };
 }
 function dayEntries(key=state.date){ return state.log.filter(e=>e.date===key); }
@@ -414,15 +419,14 @@ function renderHeader(){
 }
 
 function renderStatus(){
-  const t=dayTotals(), tgt=macroTargets();
+  const t=dayTotals(), tgt=macroTargets(t.burned);
   const burned=t.burned||0;
-  const effectiveTgt=tgt.kcal+burned;
   const C=2*Math.PI*50;
-  const arc=$("#kcalArc"); const ratio=Math.min(t.kcal/Math.max(effectiveTgt,1),1);
+  const arc=$("#kcalArc"); const ratio=Math.min(t.kcal/Math.max(tgt.kcal,1),1);
   arc.style.strokeDasharray=C; arc.style.strokeDashoffset=C*(1-ratio);
-  arc.style.stroke = t.kcal>effectiveTgt ? "var(--over)" : "var(--kcal)";
+  arc.style.stroke = t.kcal>tgt.kcal ? "var(--over)" : "var(--kcal)";
   $("#kcalNow").textContent=t.kcal;
-  $("#kcalTgt").textContent=effectiveTgt;
+  $("#kcalTgt").textContent=tgt.kcal;
   const be=$("#kcalBurned");
   if(burned>0){be.textContent=`💪 +${burned} kcal`;be.style.display='block';}
   else{be.style.display='none';}
@@ -440,20 +444,37 @@ function renderStatus(){
 
 function renderToday(){
   const list=$("#todayList"); const entries=dayEntries(); list.innerHTML="";
-  $("#todayCount").textContent = entries.length ? entries.length+(entries.length===1?" stavka":" stavki") : "";
-  if(!entries.length){ list.innerHTML=`<div class="empty">Još ništa nije uneto. Tapni namirnicu ispod.</div>`; return; }
+  const cnt=entries.length;
+  $("#todayCount").textContent=cnt?(cnt+(cnt===1?" stavka":" stavki")):"";
+  if(!cnt){ list.innerHTML=`<div class="empty">Još ništa nije uneto. Tapni namirnicu ispod.</div>`; return; }
   entries.slice().reverse().forEach(e=>{
     const row=document.createElement("div"); row.className="item";
     if(e.isWorkout){
+      const wk=e.kcal||0;
+      const wP=(wk*0.05/4).toFixed(1), wC=(wk*0.45/4).toFixed(1), wF=(wk*0.50/9).toFixed(1);
       row.innerHTML=`<div class="ic">${e.workoutEmoji||'💪'}</div>
-        <div class="nm"><b>${e.workoutName||e.name}</b><small>trening</small></div>
+        <div class="nm"><b>${e.workoutName||e.name}</b>
+          <div class="item-macros">
+            <span class="m-qty">trening</span>
+            <span class="m-p">P: -${wP}g</span>
+            <span class="m-c">UH: -${wC}g</span>
+            <span class="m-f">M: -${wF}g</span>
+          </div></div>
         <div class="kc" style="color:var(--pro)">-${Math.round(e.kcal)}<small>kcal</small></div>
         <button class="del" data-id="${e.id}">✕</button>`;
     } else {
       const food=state.foods.find(f=>f.id===e.foodId);
-      const icon = food&&food.img ? `<img class="ic" src="${food.img}">`
-        : `<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
-      row.innerHTML=`${icon}<div class="nm"><b>${e.name}</b><small>${e.qty} g</small></div>
+      const icon=food&&food.img?`<img class="ic" src="${food.img}">`
+        :`<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
+      const p=(e.protein||0),c=(e.carbs||0),f=(e.fat||0);
+      row.innerHTML=`${icon}
+        <div class="nm"><b>${e.name}</b>
+          <div class="item-macros">
+            <span class="m-qty">${e.qty}g</span>
+            <span class="m-p">P: ${p.toFixed(1)}g</span>
+            <span class="m-c">UH: ${c.toFixed(1)}g</span>
+            <span class="m-f">M: ${f.toFixed(1)}g</span>
+          </div></div>
         <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
         <button class="del" data-id="${e.id}">✕</button>`;
     }
