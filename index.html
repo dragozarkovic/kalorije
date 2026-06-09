@@ -316,7 +316,7 @@ const DEFAULT_SETTINGS = {
 };
 const MACRO = { protein:{c:"var(--pro)",l:"Proteini",k:4}, carbs:{c:"var(--carb)",l:"Ugljeni h.",k:4}, fat:{c:"var(--fat)",l:"Masti",k:9} };
 
-let state = { settings:{...DEFAULT_SETTINGS}, foods:[], log:[], date:todayKey(), activeTab:"Moje", chartMetric:"kcal" };
+let state = { settings:{...DEFAULT_SETTINGS}, foods:[], log:[], date:todayKey(), activeTab:"Moje", chartMetric:"all" };
 
 /* ---------- date helpers ---------- */
 function todayKey(d=new Date()){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
