@@ -65,9 +65,10 @@
   .macro .lab .vl{font-family:var(--display);font-weight:700;font-size:13px;}
   .macro .lab .vl b{color:var(--txt);}
   .macro .lab .vl span{color:var(--faint);font-weight:500;}
-  .bar{height:7px;border-radius:6px;background:#000;overflow:hidden;position:relative;}
+  .bar{height:7px;border-radius:6px;background:#000;position:relative;}
   .bar > i{display:block;height:100%;border-radius:6px;transition:width .35s cubic-bezier(.3,.8,.3,1);}
-  .bar.over > i{background:var(--over)!important;}
+  .bar-over-seg{position:absolute;top:-1px;right:-3px;height:9px;width:11%;background:var(--over);border-radius:0 5px 5px 0;border:1.5px solid var(--bg2);}
+  .over-badge{font-size:10px;background:rgba(255,93,93,.18);color:var(--over);padding:1px 5px;border-radius:5px;font-weight:600;margin-left:4px;}
 
   /* ---------- Section titles ---------- */
   .sec-h{display:flex;align-items:center;justify-content:space-between;margin:22px 4px 10px;}
@@ -434,10 +435,12 @@ function renderStatus(){
   for(const key of ["protein","carbs","fat"]){
     const cur=t[key], tg=tgt[key], pct=Math.min(cur/Math.max(tg,1)*100,100), over=cur>tg;
     const m=MACRO[key];
+    const overAmt=over?cur-tg:0;
+    const badge=over?`<span class="over-badge">+${overAmt}g</span>`:'';
     const el=document.createElement("div"); el.className="macro";
     el.innerHTML=`<div class="lab"><span class="nm">${m.l}</span>
-      <span class="vl"><b>${cur}</b><span> / ${tg} g</span></span></div>
-      <div class="bar${over?" over":""}"><i style="width:${pct}%;background:${m.c}"></i></div>`;
+      <span class="vl"><b${over?' style="color:var(--over)"':''}>${cur}</b><span> / ${tg} g</span>${badge}</span></div>
+      <div class="bar"><i style="width:${Math.min(pct,100)}%;background:${m.c}${over?';border-radius:6px 0 0 6px':''}"></i>${over?'<span class="bar-over-seg"></span>':''}</div>`;
     wrap.appendChild(el);
   }
 }
@@ -553,21 +556,18 @@ function renderChart(){
 
   if(state.chartMetric==="all"){
     const META=[["kcal","var(--kcal)","Kcal"],["protein","var(--pro)","P"],["carbs","var(--carb)","UH"],["fat","var(--fat)","M"]];
-    const maxPct=150;
+    const dayData=days.map(d=>{const t=dayTotals(d);return{t,tg:macroTargets(t.burned||0)};});
+    const maxPct=Math.max(150,...META.flatMap(([k])=>dayData.map(({t,tg})=>tg[k]?Math.round(t[k]/tg[k]*100):0)));
     const yPos=v=>pt+H2*(1-Math.min(Math.max(v,0),maxPct)/maxPct);
-    // 100% target line
     const ty=yPos(100);
     html+=`<line x1="${pl}" y1="${ty.toFixed(1)}" x2="${(W-pr).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
     html+=`<text x="${(pl-3).toFixed(1)}" y="${(ty+3.5).toFixed(1)}" fill="var(--faint)" font-size="7" text-anchor="end">100%</text>`;
-    // legend
     META.forEach(([k,col,lb],i)=>{
       html+=`<circle cx="${(pl+i*72+4).toFixed(1)}" cy="8" r="3" fill="${col}"/>`;
       html+=`<text x="${(pl+i*72+10).toFixed(1)}" y="11" fill="var(--muted)" font-size="8">${lb}</text>`;
     });
-    // lines
     META.forEach(([key,col])=>{
-      const t=tgt[key]||1;
-      const vals=days.map(d=>{ const v=dayTotals(d)[key]; return v>0?Math.round(v/t*100):0; });
+      const vals=dayData.map(({t,tg})=>{const v=t[key];return v>0&&tg[key]?Math.round(v/tg[key]*100):0;});
       const pts=vals.map((v,i)=>({x:xPos(i),y:yPos(v)}));
       const d=pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
       html+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
