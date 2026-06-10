@@ -238,6 +238,28 @@
   .wk-tile .we{font-size:30px;line-height:1;}
   .wk-tile .wn{font-size:11.5px;font-weight:600;color:var(--muted);}
   .wk-tile.sel .wn{color:var(--pro);}
+  .meal-group{background:var(--surface);border:1px solid var(--line);border-radius:15px;overflow:hidden;display:flex;flex-direction:column;}
+  .meal-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;border-bottom:1px solid var(--line);background:var(--bg2);}
+  .meal-time-btn{font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:4px 8px;}
+  .meal-item{border-radius:0!important;border:none!important;border-top:1px solid var(--line)!important;background:transparent!important;}
+  .gl-pill{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;border:none;}
+  .gl-low{background:rgba(56,169,123,.22);color:var(--pro);}
+  .gl-mid{background:rgba(245,194,75,.22);color:var(--fat);}
+  .gl-high{background:rgba(255,93,93,.22);color:var(--over);}
+  .nm-row{display:flex;align-items:baseline;gap:6px;overflow:hidden;}
+  .nm-row b{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;}
+  .item-time{font-size:10px;color:var(--faint);cursor:pointer;flex-shrink:0;white-space:nowrap;user-select:none;}
+  .item-time:active{color:var(--kcal);}
+  .time-picker{display:flex;gap:14px;align-items:center;justify-content:center;margin:20px 0 24px;}
+  .tp-wrap{position:relative;}
+  .tp-wrap::before,.tp-wrap::after{content:'';position:absolute;left:0;right:0;height:44px;z-index:2;pointer-events:none;}
+  .tp-wrap::before{top:0;background:linear-gradient(to bottom,var(--bg2) 40%,transparent);}
+  .tp-wrap::after{bottom:0;background:linear-gradient(to top,var(--bg2) 40%,transparent);}
+  .tp-col{height:132px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;width:72px;border-radius:14px;background:var(--surface);border:1px solid var(--line);position:relative;}
+  .tp-col::-webkit-scrollbar{display:none;}
+  .tp-item{height:44px;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:26px;font-weight:700;scroll-snap-align:center;color:var(--faint);}
+  .tp-sep{font-family:var(--display);font-size:32px;font-weight:800;color:var(--muted);line-height:1;}
+  .tp-sel-line{position:absolute;top:50%;left:6px;right:6px;height:44px;transform:translateY(-50%);border-top:1px solid var(--line);border-bottom:1px solid var(--line);pointer-events:none;z-index:3;}
 </style>
 </head>
 <body>
@@ -313,7 +335,8 @@ const DEFAULT_TABS = ["Moje","Meso i riba","Mleko i sir","Žitarice i hleb","Pov
 const DEFAULT_SETTINGS = {
   calorieTarget: 2000, proteinPct: 30, carbsPct: 40, fatPct: 30,
   tabs: DEFAULT_TABS.slice(), apiKey: "", model: "claude-3-5-sonnet-20241022",
-  workouts: [{name:"Šetnja",emoji:"🚶"},{name:"Fudbal",emoji:"⚽"},{name:"Bicikl",emoji:"🚴"},{name:"Sobni bicikl",emoji:"🚲"},{name:"Stoni tenis",emoji:"🏓"},{name:"Plivanje",emoji:"🏊"}]
+  workouts: [{name:"Šetnja",emoji:"🚶"},{name:"Fudbal",emoji:"⚽"},{name:"Bicikl",emoji:"🚴"},{name:"Sobni bicikl",emoji:"🚲"},{name:"Stoni tenis",emoji:"🏓"},{name:"Plivanje",emoji:"🏊"}],
+  glTarget:80, mealWindow:45
 };
 const MACRO = { protein:{c:"var(--pro)",l:"Proteini",k:4}, carbs:{c:"var(--carb)",l:"Ugljeni h.",k:4}, fat:{c:"var(--fat)",l:"Masti",k:9} };
 
@@ -369,16 +392,16 @@ async function maybeSeed(){
   const f=await getAll("foods");
   if(f.length) return;
   const seed=[
-    ["Jaje (kuvano)","Meso i riba",155,13,1.1,11,50,"🥚"],
-    ["Pileća prsa","Meso i riba",165,31,0,3.6,150,"🍗"],
-    ["Grčki jogurt","Mleko i sir",59,10,3.6,0.4,170,"🥛"],
-    ["Hleb (integralni)","Žitarice i hleb",247,9,41,3.4,40,"🍞"],
-    ["Banana","Voće",89,1.1,23,0.3,120,"🍌"],
-    ["Badem","Orašasti i masti",579,21,22,50,30,"🥜"],
+    ["Jaje (kuvano)","Meso i riba",155,13,1.1,11,50,"🥚",0],
+    ["Pileća prsa","Meso i riba",165,31,0,3.6,150,"🍗",0],
+    ["Grčki jogurt","Mleko i sir",59,10,3.6,0.4,170,"🥛",11],
+    ["Hleb (integralni)","Žitarice i hleb",247,9,41,3.4,40,"🍞",55],
+    ["Banana","Voće",89,1.1,23,0.3,120,"🍌",52],
+    ["Badem","Orašasti i masti",579,21,22,50,30,"🥜",15],
   ];
-  for(const [name,tab,kcal,p,c,fat,qty,emo] of seed){
+  for(const [name,tab,kcal,p,c,fat,qty,emo,gi] of seed){
     await put("foods",{ id:uid(), name, tab, emoji:emo, img:null,
-      per100:{kcal,protein:p,carbs:c,fat}, defaultQty:qty });
+      per100:{kcal,protein:p,carbs:c,fat}, defaultQty:qty, gi });
   }
 }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -405,6 +428,28 @@ function scaleFood(food,qty){
   const f=qty/100;
   return { kcal:food.per100.kcal*f, protein:food.per100.protein*f, carbs:food.per100.carbs*f, fat:food.per100.fat*f };
 }
+function formatTime(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function groupIntoMeals(entries){
+  const food=entries.filter(e=>!e.isWorkout).sort((a,b)=>a.ts-b.ts);
+  if(!food.length) return [];
+  const win=(state.settings.mealWindow||45)*60000;
+  const meals=[]; let cur=[food[0]];
+  for(let i=1;i<food.length;i++){
+    if(food[i].ts-food[i-1].ts<=win) cur.push(food[i]);
+    else{ meals.push(cur); cur=[food[i]]; }
+  }
+  meals.push(cur);
+  return meals;
+}
+function mealGL(entries){
+  let rawGL=0;
+  entries.forEach(e=>{ const food=state.foods.find(f=>f.id===e.foodId); const gi=food?.gi??55; rawGL+=(gi*(e.carbs||0))/100; });
+  const totP=entries.reduce((s,e)=>s+(e.protein||0),0);
+  const totF=entries.reduce((s,e)=>s+(e.fat||0),0);
+  const corr=Math.max(0.5,1-(totP*0.008+totF*0.010));
+  return rawGL*corr;
+}
+function dayGL(key=state.date){ return Math.round(groupIntoMeals(dayEntries(key)).reduce((s,m)=>s+mealGL(m),0)); }
 
 /* ============================================================
    RENDER
@@ -438,52 +483,163 @@ function renderStatus(){
     const overAmt=over?cur-tg:0;
     const badge=over?`<span class="over-badge">+${overAmt}g</span>`:'';
     const el=document.createElement("div"); el.className="macro";
-    el.innerHTML=`<div class="lab"><span class="nm">${m.l}</span>
-      <span class="vl"><b${over?' style="color:var(--over)"':''}>${cur}</b><span> / ${tg} g</span>${badge}</span></div>
-      <div class="bar"><i style="width:${Math.min(pct,100)}%;background:${m.c}${over?';border-radius:6px 0 0 6px':''}"></i>${over?'<span class="bar-over-seg"></span>':''}</div>`;
+    if(key==='carbs'){
+      const glD=dayGL(), glTgt=state.settings.glTarget||80;
+      const glOver=glD>glTgt, glPct=Math.min(glD/Math.max(glTgt,1)*100,100);
+      const glBadge=glOver?`<span class="over-badge">+${glD-glTgt}</span>`:'';
+      el.innerHTML=`<div class="lab"><span class="nm">${m.l} · GL</span>
+        <span class="vl">
+          <b${over?' style="color:var(--over)"':''}>${cur}</b><span> / ${tg}g</span>${badge}
+          <span style="color:var(--faint);margin:0 3px">·</span>
+          <b${glOver?' style="color:var(--over)"':''}>${glD}</b><span> / ${glTgt}</span>${glBadge}
+        </span></div>
+        <div class="bar" style="margin-bottom:3px"><i style="width:${Math.min(pct,100)}%;background:${m.c}${over?';border-radius:6px 0 0 6px':''}"></i>${over?'<span class="bar-over-seg"></span>':''}</div>
+        <div class="bar"><i style="width:${Math.min(glPct,100)}%;background:${m.c};opacity:.42${glOver?';border-radius:6px 0 0 6px':''}"></i>${glOver?'<span class="bar-over-seg"></span>':''}</div>`;
+    } else {
+      el.innerHTML=`<div class="lab"><span class="nm">${m.l}</span>
+        <span class="vl"><b${over?' style="color:var(--over)"':''}>${cur}</b><span> / ${tg} g</span>${badge}</span></div>
+        <div class="bar"><i style="width:${Math.min(pct,100)}%;background:${m.c}${over?';border-radius:6px 0 0 6px':''}"></i>${over?'<span class="bar-over-seg"></span>':''}</div>`;
+    }
     wrap.appendChild(el);
   }
 }
 
 function renderToday(){
-  const list=$("#todayList"); const entries=dayEntries(); list.innerHTML="";
-  const cnt=entries.length;
+  const list=$("#todayList"); const allE=dayEntries(); list.innerHTML="";
+  const cnt=allE.length;
   $("#todayCount").textContent=cnt?(cnt+(cnt===1?" stavka":" stavki")):"";
   if(!cnt){ list.innerHTML=`<div class="empty">Još ništa nije uneto. Tapni namirnicu ispod.</div>`; return; }
-  entries.slice().reverse().forEach(e=>{
-    const row=document.createElement("div"); row.className="item";
-    if(e.isWorkout){
-      const wk=e.kcal||0;
-      const wP=(wk*0.05/4).toFixed(1), wC=(wk*0.45/4).toFixed(1), wF=(wk*0.50/9).toFixed(1);
+  const workouts=allE.filter(e=>e.isWorkout).sort((a,b)=>a.ts-b.ts);
+  const meals=groupIntoMeals(allE);
+  const chunks=[];
+  meals.forEach(m=>chunks.push({type:'meal',entries:m,ts:m[0].ts}));
+  workouts.forEach(w=>chunks.push({type:'workout',entry:w,ts:w.ts}));
+  chunks.sort((a,b)=>a.ts-b.ts);
+  chunks.forEach(chunk=>{
+    if(chunk.type==='workout'){
+      const e=chunk.entry; const wk=e.kcal||0;
+      const wP=(wk*0.05/4).toFixed(1),wC=(wk*0.45/4).toFixed(1),wF=(wk*0.50/9).toFixed(1);
+      const row=document.createElement("div"); row.className="item";
       row.innerHTML=`<div class="ic">${e.workoutEmoji||'💪'}</div>
         <div class="nm"><b>${e.workoutName||e.name}</b>
           <div class="item-macros">
-            <span class="m-qty">trening</span>
-            <span class="m-p">P: -${wP}g</span>
-            <span class="m-c">UH: -${wC}g</span>
-            <span class="m-f">M: -${wF}g</span>
+            <span class="m-qty">trening</span><span class="m-p">P: -${wP}g</span>
+            <span class="m-c">UH: -${wC}g</span><span class="m-f">M: -${wF}g</span>
           </div></div>
         <div class="kc" style="color:var(--pro)">-${Math.round(e.kcal)}<small>kcal</small></div>
         <button class="del" data-id="${e.id}">✕</button>`;
+      row.querySelector(".del").onclick=async()=>{ await del("log",e.id); state.log=state.log.filter(x=>x.id!==e.id); render(); };
+      list.appendChild(row);
     } else {
-      const food=state.foods.find(f=>f.id===e.foodId);
-      const icon=food&&food.img?`<img class="ic" src="${food.img}">`
-        :`<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
-      const p=(e.protein||0),c=(e.carbs||0),f=(e.fat||0);
-      row.innerHTML=`${icon}
-        <div class="nm"><b>${e.name}</b>
-          <div class="item-macros">
-            <span class="m-qty">${e.qty}g</span>
-            <span class="m-p">P: ${p.toFixed(1)}g</span>
-            <span class="m-c">UH: ${c.toFixed(1)}g</span>
-            <span class="m-f">M: ${f.toFixed(1)}g</span>
-          </div></div>
-        <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
-        <button class="del" data-id="${e.id}">✕</button>`;
+      const entries=chunk.entries;
+      const gl=Math.round(mealGL(entries));
+      const mKcal=Math.round(entries.reduce((s,e)=>s+e.kcal,0));
+      const glC=gl<10?'gl-low':gl<20?'gl-mid':'gl-high';
+      const card=document.createElement("div"); card.className="meal-group";
+      const hdr=document.createElement("div"); hdr.className="meal-hdr";
+      hdr.innerHTML=`<button class="meal-time-btn">⏱ ${formatTime(entries[0].ts)}</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--faint)">${mKcal} kcal</span>
+          <button class="gl-pill ${glC}">GL ${gl}</button>
+        </div>`;
+      // meal time is display only – per-item time edit below
+      hdr.querySelector(".gl-pill").onclick=()=>openGLDetail(entries);
+      card.appendChild(hdr);
+      entries.forEach(e=>{
+        const food=state.foods.find(f=>f.id===e.foodId);
+        const icon=food&&food.img?`<img class="ic" src="${food.img}">`
+          :`<div class="ic">${food&&food.emoji?food.emoji:(e.name[0]||"?")}</div>`;
+        const p=(e.protein||0),c=(e.carbs||0),f=(e.fat||0);
+        const row=document.createElement("div"); row.className="item meal-item";
+        row.innerHTML=`${icon}
+          <div class="nm">
+            <div class="nm-row"><b>${e.name}</b><span class="item-time">⏱ ${formatTime(e.ts)}</span></div>
+            <div class="item-macros">
+              <span class="m-qty">${e.qty}g</span><span class="m-p">P: ${p.toFixed(1)}g</span>
+              <span class="m-c">UH: ${c.toFixed(1)}g</span><span class="m-f">M: ${f.toFixed(1)}g</span>
+            </div>
+          </div>
+          <div class="kc">${Math.round(e.kcal)}<small>kcal</small></div>
+          <button class="del" data-id="${e.id}">✕</button>`;
+        row.querySelector(".del").onclick=async()=>{ await del("log",e.id); state.log=state.log.filter(x=>x.id!==e.id); render(); };
+        row.querySelector(".item-time").onclick=e2=>{ e2.stopPropagation(); openEditItemTime(e); };
+        card.appendChild(row);
+      });
+      list.appendChild(card);
     }
-    row.querySelector(".del").onclick=async()=>{ await del("log",e.id); state.log=state.log.filter(x=>x.id!==e.id); render(); };
-    list.appendChild(row);
   });
+}
+function openEditItemTime(entry){
+  const t=new Date(entry.ts);
+  const curH=t.getHours();
+  const curM=Math.round(t.getMinutes()/5)*5%60;
+  const m5=[0,5,10,15,20,25,30,35,40,45,50,55];
+  const pad=n=>String(n).padStart(2,'0');
+  const hItems='<div class="tp-item" aria-hidden="true"></div>'+
+    Array.from({length:24},(_,i)=>`<div class="tp-item">${pad(i)}</div>`).join('')+
+    '<div class="tp-item" aria-hidden="true"></div>';
+  const mItems='<div class="tp-item" aria-hidden="true"></div>'+
+    m5.map(m=>`<div class="tp-item">${pad(m)}</div>`).join('')+
+    '<div class="tp-item" aria-hidden="true"></div>';
+  openSheet(`<h2>Promeni vreme</h2>
+    <div class="desc" style="margin-bottom:0">${entry.name}</div>
+    <div class="time-picker">
+      <div class="tp-wrap"><div class="tp-col" id="tpH">${hItems}</div><div class="tp-sel-line"></div></div>
+      <div class="tp-sep">:</div>
+      <div class="tp-wrap"><div class="tp-col" id="tpM">${mItems}</div><div class="tp-sel-line"></div></div>
+    </div>
+    <div class="hint" style="margin-top:-12px;margin-bottom:16px;text-align:center">Skok na 5 minuta · skroluj da promeniš</div>
+    <div class="btn-row">
+      <button class="btn ghost" onclick="closeSheet()">Otkaži</button>
+      <button class="btn kcal" id="itemTimeSave">Sačuvaj</button>
+    </div>`);
+  const tpH=document.getElementById('tpH');
+  const tpM=document.getElementById('tpM');
+  const mIdx=m5.indexOf(curM); 
+  requestAnimationFrame(()=>{
+    tpH.scrollTop=curH*44;
+    tpM.scrollTop=Math.max(0,mIdx)*44;
+  });
+  document.getElementById('itemTimeSave').onclick=async()=>{
+    const nH=Math.max(0,Math.min(23,Math.round(tpH.scrollTop/44)));
+    const nMIdx=Math.max(0,Math.min(11,Math.round(tpM.scrollTop/44)));
+    const nM=m5[nMIdx];
+    const old=new Date(entry.ts);
+    entry.ts=new Date(old.getFullYear(),old.getMonth(),old.getDate(),nH,nM,0,0).getTime();
+    await put("log",entry);
+    const i=state.log.findIndex(x=>x.id===entry.id); if(i>=0) state.log[i]=entry;
+    closeSheet(); render(); toast(`Vreme promenjeno na ${pad(nH)}:${pad(nM)}`);
+  };
+}
+function openGLDetail(entries){
+  const tgt=state.settings.glTarget||80;
+  let rows=''; let rawGL=0;
+  entries.forEach(e=>{
+    const food=state.foods.find(f=>f.id===e.foodId); const gi=food?.gi??55;
+    const gl=(gi*(e.carbs||0)/100); rawGL+=gl;
+    rows+=`<tr><td style="padding:5px 0">${e.name}</td>
+      <td style="color:var(--faint);text-align:right;padding:5px 0;white-space:nowrap">GI ${gi}</td>
+      <td style="color:var(--carb);text-align:right;padding:5px 0;white-space:nowrap">UH ${(e.carbs||0).toFixed(1)}g</td>
+      <td style="font-weight:700;text-align:right;padding:5px 0;white-space:nowrap">GL ${gl.toFixed(1)}</td></tr>`;
+  });
+  const totP=entries.reduce((s,e)=>s+(e.protein||0),0);
+  const totF=entries.reduce((s,e)=>s+(e.fat||0),0);
+  const corr=Math.max(0.5,1-(totP*0.008+totF*0.010));
+  const effGL=Math.round(rawGL*corr);
+  openSheet(`<h2>GL računica</h2>
+    <div class="desc">Glikemijsko opterećenje obroka</div>
+    <table style="width:100%;font-size:13px;border-collapse:collapse">${rows}
+      <tr style="border-top:1px solid var(--line)">
+        <td colspan="3" style="color:var(--muted);padding:8px 0 4px">Sirovi GL</td>
+        <td style="font-weight:700;text-align:right;padding:8px 0 4px">${rawGL.toFixed(1)}</td></tr>
+    </table>
+    <div style="background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:12px;margin:12px 0;font-size:12.5px;color:var(--muted);line-height:1.7">
+      Korekcija: ${totP.toFixed(0)}g P × 0.008 + ${totF.toFixed(0)}g M × 0.010 = ${(1-corr).toFixed(3)}<br>
+      Faktor: <b style="color:var(--txt)">${corr.toFixed(2)}</b><br>
+      <span style="color:var(--txt);font-weight:700">Efektivni GL = ${rawGL.toFixed(1)} × ${corr.toFixed(2)} = <span style="color:var(--carb)">${effGL}</span></span>
+    </div>
+    <div style="font-size:12px;color:var(--faint)">Dnevni GL target: <b style="color:var(--txt)">${tgt}</b></div>
+    <div class="btn-row" style="margin-top:16px"><button class="btn ghost" onclick="closeSheet()">Zatvori</button></div>`);
 }
 
 function renderTabs(){
@@ -531,7 +687,7 @@ async function toggleFavorite(food){
 }
 
 /* ---------- 14-day chart ---------- */
-const CHART_METRICS=[["all","Sve",""],["kcal","Kalorije","var(--kcal)"],["protein","Proteini","var(--pro)"],["carbs","Ugljeni h.","var(--carb)"],["fat","Masti","var(--fat)"]];
+const CHART_METRICS=[["all","Sve",""],["kcal","Kalorije","var(--kcal)"],["protein","Proteini","var(--pro)"],["carbs","Ugljeni h.","var(--carb)"],["fat","Masti","var(--fat)"],["gl","GL","var(--carb)"]];
 function renderChartChips(){
   const c=$("#chartChips"); c.innerHTML="";
   CHART_METRICS.forEach(([key,lab,col])=>{
@@ -555,22 +711,29 @@ function renderChart(){
   let html="";
 
   if(state.chartMetric==="all"){
-    const META=[["kcal","var(--kcal)","Kcal"],["protein","var(--pro)","P"],["carbs","var(--carb)","UH"],["fat","var(--fat)","M"]];
+    const META=[["kcal","var(--kcal)","Kcal"],["protein","var(--pro)","P"],["carbs","var(--carb)","UH"],["fat","var(--fat)","M"],["gl","var(--carb)","GL"]];
     const dayData=days.map(d=>{const t=dayTotals(d);return{t,tg:macroTargets(t.burned||0)};});
-    const maxPct=Math.max(150,...META.flatMap(([k])=>dayData.map(({t,tg})=>tg[k]?Math.round(t[k]/tg[k]*100):0)));
+    const glTgtA=state.settings.glTarget||80;
+    const maxPct=Math.max(150,
+      ...META.filter(([k])=>k!=='gl').flatMap(([k])=>dayData.map(({t,tg})=>tg[k]?Math.round(t[k]/tg[k]*100):0)),
+      ...days.map(d=>glTgtA?Math.round(dayGL(d)/glTgtA*100):0));
     const yPos=v=>pt+H2*(1-Math.min(Math.max(v,0),maxPct)/maxPct);
     const ty=yPos(100);
     html+=`<line x1="${pl}" y1="${ty.toFixed(1)}" x2="${(W-pr).toFixed(1)}" y2="${ty.toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
     html+=`<text x="${(pl-3).toFixed(1)}" y="${(ty+3.5).toFixed(1)}" fill="var(--faint)" font-size="7" text-anchor="end">100%</text>`;
     META.forEach(([k,col,lb],i)=>{
-      html+=`<circle cx="${(pl+i*72+4).toFixed(1)}" cy="8" r="3" fill="${col}"/>`;
-      html+=`<text x="${(pl+i*72+10).toFixed(1)}" y="11" fill="var(--muted)" font-size="8">${lb}</text>`;
+      const lx=(pl+i*55+4).toFixed(1);
+      html+=`<circle cx="${lx}" cy="8" r="3" fill="${col}"${k==='gl'?' stroke-dasharray="0"':''}/>`;
+      html+=`<text x="${(pl+i*55+10).toFixed(1)}" y="11" fill="var(--muted)" font-size="8">${lb}</text>`;
     });
     META.forEach(([key,col])=>{
-      const vals=dayData.map(({t,tg})=>{const v=t[key];return v>0&&tg[key]?Math.round(v/tg[key]*100):0;});
+      let vals;
+      if(key==='gl') vals=days.map(d=>glTgtA?Math.round(dayGL(d)/glTgtA*100):0);
+      else vals=dayData.map(({t,tg})=>{const v=t[key];return v>0&&tg[key]?Math.round(v/tg[key]*100):0;});
       const pts=vals.map((v,i)=>({x:xPos(i),y:yPos(v)}));
       const d=pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
-      html+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
+      const dash=key==='gl'?' stroke-dasharray="5 3"':'';
+      html+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"${dash}/>`;
       vals.forEach((v,i)=>{
         if(v===0) return;
         const isT=days[i]===state.date;
@@ -580,8 +743,8 @@ function renderChart(){
   } else {
     const key=state.chartMetric;
     const col=CHART_METRICS.find(m=>m[0]===key)[2];
-    const t=tgt[key]||1;
-    const vals=days.map(d=>dayTotals(d)[key]);
+    const t=key==='gl'?(state.settings.glTarget||80):(tgt[key]||1);
+    const vals=key==='gl'?days.map(d=>dayGL(d)):days.map(d=>dayTotals(d)[key]);
     const maxV=Math.max(t*1.35,...vals,1);
     const yPos=v=>pt+H2*(1-Math.max(v,0)/maxV);
     // fill
@@ -667,19 +830,7 @@ async function addWorkout(){
   const id=await put("log",entry); entry.id=id; state.log.push(entry);
   closeSheet(); render(); toast(`Trening dodat: -${kcal} kcal`);
 }
-ov.addEventListener("click",e=>{ if(e.target===ov) closeSheet(); });
-let _ty0=0,_ts0=0;
-sheet.addEventListener('touchstart',e=>{_ty0=e.touches[0].clientY;_ts0=sheet.scrollTop;},{passive:true});
-sheet.addEventListener('touchmove',e=>{
-  if(_ts0>0) return;
-  const dy=e.touches[0].clientY-_ty0;
-  if(dy>0) sheet.style.transform=`translateY(${Math.min(dy,300)}px)`;
-},{passive:true});
-sheet.addEventListener('touchend',e=>{
-  const dy=e.changedTouches[0].clientY-_ty0;
-  sheet.style.transform='';
-  if(dy>90&&_ts0===0) closeSheet();
-});
+// sheet closes only via X button
 
 /* ---- QTY modal ---- */
 let qtyState=null;
@@ -767,6 +918,10 @@ function openAddFood(existing=null){
           <input class="inp" id="fFat" type="text" inputmode="decimal" value="${p.fat}" placeholder="0"></div>
       </div>
     </div>
+    <div class="field"><label>Glikemijski indeks — GI (0–100)</label>
+      <input class="inp" id="fGI" type="text" inputmode="numeric" value="${existing?.gi??55}" placeholder="55">
+      <div class="hint">0 = bez UH (meso, jaja, masti). 55 = default za nepoznato. Banana ≈ 52, beli hleb ≈ 75, ovsene pahulje ≈ 55.</div>
+    </div>
     <div class="btn-row">
       ${existing?`<button class="btn danger" id="fDelete">Obriši</button>`:""}
       <button class="btn kcal" id="fSave">${existing?"Sačuvaj izmene":"Dodaj namirnicu"}</button>
@@ -786,6 +941,7 @@ async function saveFood(existing){
     id: existing?existing.id:uid(), name, tab:$("#fTab").value, img:foodImg||null,
     emoji: existing?existing.emoji:null,
     defaultQty: Math.max(1, Math.round(+$("#fQty").value||100)),
+    gi:Math.max(0,Math.min(100,Math.round(parseNum($("#fGI").value)||55))),
     per100:{ kcal:parseNum($("#fKcal").value), protein:parseNum($("#fPro").value), carbs:parseNum($("#fCarb").value), fat:parseNum($("#fFat").value) }
   };
   await put("foods",food);
@@ -949,6 +1105,16 @@ function openSettings(){
     </div>
 
     <div class="divider"></div>
+    <div class="row2">
+      <div class="field"><label>GL dnevni target</label>
+        <input class="inp" id="sGlTarget" type="number" inputmode="numeric" value="${s.glTarget||80}">
+        <div class="hint">Low carb ≈ 80, umereno ≈ 100</div></div>
+      <div class="field"><label>Prozor obroka (min)</label>
+        <input class="inp" id="sMealWindow" type="number" inputmode="numeric" value="${s.mealWindow||45}">
+        <div class="hint">Namirnice unete unutar ovog intervala grupišu se u isti obrok</div></div>
+    </div>
+
+    <div class="divider"></div>
     <div class="field"><label>Anthropic API ključ (za skeniranje tablica)</label>
       <input class="inp" id="sKey" type="password" value="${s.apiKey||""}" placeholder="sk-ant-…" autocomplete="off"></div>
     <div class="field"><label>Model</label>
@@ -981,6 +1147,7 @@ function openSettings(){
   $("#sSave").onclick=async()=>{
     state.settings.calorieTarget=Math.max(0,Math.round(+$("#sKcal").value||0));
     state.settings.proteinPct=+$("#sP").value||0; state.settings.carbsPct=+$("#sC").value||0; state.settings.fatPct=+$("#sF").value||0;
+    state.settings.glTarget=Math.max(0,Math.round(+$("#sGlTarget").value||80)); state.settings.mealWindow=Math.max(5,Math.round(+$("#sMealWindow").value||45));
     state.settings.apiKey=$("#sKey").value.trim(); state.settings.model=$("#sModel").value.trim()||"claude-3-5-sonnet-20241022";
     await saveSettings(); if(!state.settings.tabs.includes(state.activeTab)) state.activeTab="Moje";
     closeSheet(); render(); toast("Sačuvano");
